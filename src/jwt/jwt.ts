@@ -1,7 +1,6 @@
 import * as jwt from 'jsonwebtoken';
 import {promisify} from "util";
 import redisClient from "../redis";
-import {ITopManager} from "../interfaces";
 
 const secret = 'test';
 

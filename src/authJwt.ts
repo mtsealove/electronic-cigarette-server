@@ -1,12 +1,11 @@
 import express from "express";
-import {IRequest} from "./interfaces";
 import {verify} from './jwt/jwt';
 
 const authJWT = (req:express.Request<IRequest>, res:express.Response, next:express.NextFunction) => {
     if (req.headers.authorization) {
         const token = req.headers.authorization.split('Bearer ') [1]; // header에서 access token을 가져옵니다.
         const result = verify(token);
-        console.log(result);
+        // console.log(result);
         if(result) {
             req.params.user_id = result.user_id;
             req.params.seq = result.seq;

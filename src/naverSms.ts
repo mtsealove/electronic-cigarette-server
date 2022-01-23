@@ -1,13 +1,13 @@
 import CryptoJS from 'crypto-js';
-import {SmsMessage} from "./interfaces";
 const request = require('request');
 
+// 네이버 sms 발송 api
 const sendMessage = (message: string, phones: string[]) => {
     let resultCode = 404;
     const date = Date.now().toString();
-    const uri = 'ncp:sms:kr:255267670713:sms_test'; //서비스 ID
-    const secretKey = '1IpAXPx20chQNjadtXlIOY5D9cSq7xRjIsev8wua';// Secret Key
-    const accessKey = 'rpZb3tyXr6TVxsO2vHkJ';//Access Key
+    const uri: string = process.env.NAVER_URL; //서비스 ID
+    const secretKey = process.env.NAVER_SECRET_KEY;// Secret Key
+    const accessKey = process.env.NAVER_ACCESS_KEY;//Access Key
     const method = "POST";
     const space = " ";
     const newLine = "\n";

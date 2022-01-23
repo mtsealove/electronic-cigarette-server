@@ -1,21 +1,8 @@
 import express from 'express';
 import * as jwt from './jwt/jwt';
-import redisClient from './redis';
 import authJWT from "./authJwt";
 import * as sql from './sql';
 import * as naver from './naverSms';
-import {
-    IMemberRequest,
-    IRequest,
-    ItemType,
-    ITopManager,
-    ReqAuth,
-    ReqDuplicate,
-    ReqItems,
-    ReqMembers, ReqTransaction,
-    ResultTopManager, SortType
-} from "./interfaces";
-import {login} from "./sql";
 
 const app = express();
 const cors = require('cors');
@@ -134,6 +121,7 @@ app.get('/auth', (req: express.Request<{}, {}, {}, ReqAuth>, res: express.Respon
     }
 });
 
+// 회원 등록
 app.post('/members', authJWT, async (req: express.Request<IRequest>, res: express.Response) => {
     const {name, phone, registerDate} = req.body;
     if (req.params.user_id) {
@@ -148,28 +136,54 @@ app.post('/members', authJWT, async (req: express.Request<IRequest>, res: expres
     }
 });
 
+// 회원 탈퇴
+app.post('/members/delete', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
+    const {memberId} = req.body;
+    const {user_id} = req.params;
+    if (user_id) {
+        sql.deleteMember(memberId, user_id)
+            .then(() => {
+                res.status(200).json(true);
+            }).catch(() => {
+            res.status(500).json(false);
+        });
+    } else {
+        res.status(400).json(false);
+    }
+});
+
 
 // @ts-ignore
-app.get('/members', authJWT, async (req: express.Request<IRequest, {}, {},ReqMembers>, res: express.Response) => {
-    const {page, rows, query} = req.query;
+app.get('/members', authJWT, async (req: express.Request<IRequest, {}, {}, ReqMembers>, res: express.Response) => {
+    const {page, rows, query, isPresent} = req.query;
     if (req.params.user_id) {
-        sql.getMembers(req.params.user_id, page, rows, query).then((result) => {
-            res.status(200).json(result);
-        }).catch(() => {
-            res.status(400).json([]);
-        });
+        if(isPresent) {
+            sql.getPresentAbleMembers(req.params.user_id, query||'')
+                .then((result)=>{
+                    res.status(200).json(result);
+                }).catch(()=>{
+                    res.status(400).json([]);
+            })
+        } else {
+            sql.getMembers(req.params.user_id, page, rows, query).then((result) => {
+                res.status(200).json(result);
+            }).catch(() => {
+                res.status(400).json([]);
+            });
+        }
     } else {
         res.status(400).json([]);
     }
 });
 
-app.get('/members/:memberId', authJWT ,async (req: express.Request<IMemberRequest>, res: express.Response)=>{
+// 특정 회원 조회
+app.get('/members/:memberId', authJWT, async (req: express.Request<IMemberRequest>, res: express.Response) => {
     const {user_id, memberId} = req.params;
-    if(user_id) {
+    if (user_id) {
         sql.getMember(memberId)
-            .then((result)=>{
+            .then((result) => {
                 res.status(200).json(result);
-            }).catch(()=>{
+            }).catch(() => {
             res.status(500).json(false);
         })
     } else {
@@ -178,18 +192,51 @@ app.get('/members/:memberId', authJWT ,async (req: express.Request<IMemberReques
 })
 
 // 상품 조회
-app.post('/items', authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
+app.post('/items', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
     const {name, price, type} = req.body;
-    if(user_id) {
+    if (user_id) {
         sql.postItem(user_id, name, price, type)
-            .then(()=>{
+            .then(() => {
                 res.status(200).json(true);
-            }).catch(()=>{
-                res.status(400).json(false);
+            }).catch(() => {
+            res.status(400).json(false);
         })
     } else {
         res.status(400).json(false);
+    }
+});
+
+// 특정 상품 조회
+app.get('/items/:itemId', authJWT, (req: express.Request<IItemRequest>, res: express.Response) => {
+    const {user_id, itemId} = req.params;
+    if (user_id) {
+        sql.getItem(itemId)
+            .then((result) => {
+                res.status(200).json(result);
+            }).catch(() => {
+            res.status(400).json(false);
+        })
+    } else {
+        res.status(400).json(false);
+    }
+});
+
+// 일|월별 판매 순위
+//@ts-ignore
+app.get('/rank/items', authJWT, async (req: express.Request<IRequest, {}, {}, ReqItemRank>, res: express.Response)=>{
+    const {user_id} = req.params;
+    if(user_id) {
+        const {isMonth} = req.query;
+        sql.getItemRank(user_id, isMonth === 'true')
+            .then((result)=>{
+                res.status(200).json(result);
+            })
+            .catch(()=>{
+                res.json(405).json(false);
+            });
+    } else {
+        res.status(401).json(false);
     }
 });
 
@@ -208,14 +255,14 @@ app.get('/items', authJWT, (req: express.Request<IRequest, {}, {}, ReqItems>, re
 });
 
 // 상품 입고
-app.post('/items/warehouse', authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
-    if(req.params.user_id) {
+app.post('/items/warehouse', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
+    if (req.params.user_id) {
         const {id, cnt} = req.body;
-        sql.warehouseItem(req.params.user_id,id, cnt)
-            .then(()=>{
+        sql.warehouseItem(req.params.user_id, id, cnt)
+            .then(() => {
                 res.status(200).json(true);
-            }).catch(()=>{
-                res.status(400).json(false);
+            }).catch(() => {
+            res.status(400).json(false);
         })
     } else {
         res.status(400).json(false);
@@ -223,29 +270,26 @@ app.post('/items/warehouse', authJWT, (req: express.Request<IRequest>, res: expr
 });
 
 // 상품 판매
-app.post('/items/sale', authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
+app.post('/items/sale', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
-    if(user_id) {
-        const {memberId, itemId, cnt} = req.body;
-        sql.saleItem(user_id, memberId, itemId, cnt)
-            .then(()=>res.status(200).json(true))
-            .catch(()=>res.status(400).json(false));
+    if (user_id) {
+        const {memberId, itemId, cnt, isPresent} = req.body;
+        sql.saleItem(user_id, memberId, itemId, cnt, isPresent)
+            .then(() => res.status(200).json(true))
+            .catch(() => res.status(400).json(false));
     }
 });
 
 // 판매 내역
 //@ts-ignore
-app.get('/transactions', authJWT, (req: express.Request<IRequest, {}, {}, ReqTransaction>, res: express.Response)=>{
+app.get('/transactions', authJWT, (req: express.Request<IRequest, {}, {}, ReqTransaction>, res: express.Response) => {
     const {user_id} = req.params;
     const {page, rows, query, date, itemId, memberId} = req.query;
 
-    console.log('item: ', itemId);
-    console.log('member:',memberId);
-    if(user_id) {
-        sql.getTransactions(user_id, query, page, rows, date, itemId, memberId).
-            then((data)=>{
-                res.status(200).json(data);
-        }).catch(()=>{
+    if (user_id) {
+        sql.getTransactions(user_id, query, page, rows, date, itemId, memberId).then((data) => {
+            res.status(200).json(data);
+        }).catch(() => {
             res.status(400).json(false);
         })
     } else {
@@ -254,25 +298,25 @@ app.get('/transactions', authJWT, (req: express.Request<IRequest, {}, {}, ReqTra
 })
 
 // 거래 취소
-app.post('/transactions/refund', authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
-    if(req.params.user_id) {
+app.post('/transactions/refund', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
+    if (req.params.user_id) {
         const {transactionId} = req.body;
         sql.cancelTransaction(transactionId)
-            .then(()=>{
+            .then(() => {
                 res.status(200).json(true);
-            }).catch(()=>{
-                res.status(400).json(false);
+            }).catch(() => {
+            res.status(400).json(false);
         })
     }
 });
 
 // 메세지 발송
-app.post('/send/message', authJWT, async (req: express.Request<IRequest>, res: express.Response)=>{
+app.post('/send/message', authJWT, async (req: express.Request<IRequest>, res: express.Response) => {
     const {members, message} = req.body;
-    if(req.params.user_id) {
+    if (req.params.user_id) {
         // 회원 ID 목록의 데이터가 존재하지 않으면 전체 발송
-        if(members.length===0) {
-            const fetch = await sql.getAllPhoneNumbers();
+        if (members.length === 0) {
+            const fetch = await sql.getAllPhoneNumbers(req.params.user_id);
             res.status(200).json(true);
         } else {  //  특정 회원 ID 선택 발송
             const fetch = await sql.getPhoneNumbers(members);
@@ -281,6 +325,21 @@ app.post('/send/message', authJWT, async (req: express.Request<IRequest>, res: e
         }
     } else {
         res.status(400).json(false);
+    }
+});
+
+// 최근 거래
+app.get('/recent', authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
+    const {user_id} = req.params;
+    if(user_id) {
+        sql.getRecentTransaction(user_id)
+            .then((result)=>{
+                res.status(200).json(result);
+            }).catch(()=>{
+                res.status(400).json(false);
+        })
+    } else {
+        res.status(401).json(false);
     }
 })
 

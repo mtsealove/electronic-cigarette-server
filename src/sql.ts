@@ -1,32 +1,20 @@
 import {MysqlError,} from "mysql";
-import {
-    IItem,
-    IMember, ISingleMember,
-    IStore,
-    ItemType,
-    ITopManager,
-    ITransaction, ReqTransaction,
-    ResItems,
-    ResMembers, ResTransactions,
-    SortBy,
-    SortType, TransactionDate
-} from "./interfaces";
 import * as crypto from 'crypto';
+import {rejects} from "assert";
 
-const cryptoSecret = 'MySecretKey1$1$234';
+const cryptoSecret = process.env.DB_SECRET;
 
 const mysql = require('mysql');
 const connection = mysql.createConnection({
-    host: '13.124.40.113',    // 호스트 주소
-    user: 'vape_manager',           // mysql user
-    password: 'Locker0916*',       // mysql password
-    database: 'kvape'         // mysql 데이터베이스
+    host: process.env.DB_HOST,    // 호스트 주소
+    user: process.env.DB_USER,           // mysql user
+    password: process.env.DB_PW,       // mysql password
+    database: process.env.DB         // mysql 데이터베이스
 });
 
 const topLogin = (id: string, pw: string): Promise<ITopManager> => {
     return new Promise<ITopManager>(((resolve, reject) => {
         const hashed = crypto.createHmac('sha256', cryptoSecret).update(pw).digest('hex');
-        console.log(hashed);
         connection.query('select seq, name, user_id from top_managers where user_id = ? and password = ?', [id, hashed], (err: MysqlError | null, result: any) => {
             if (err) {
                 reject();
@@ -44,6 +32,7 @@ const topLogin = (id: string, pw: string): Promise<ITopManager> => {
 const login = (id: string, pw: string) => {
     return new Promise<ITopManager>(((resolve, reject) => {
         const hashed = crypto.createHmac('sha256', cryptoSecret).update(pw).digest('hex');
+        // console.log(hashed);
         connection.query('select user_id, name, seq from managers where user_id = ? and password = ?',
             [id, hashed], (err: MysqlError | null, results: ITopManager[]) => {
                 if (err) {
@@ -296,6 +285,7 @@ const warehouseItem = (managerId: string, id: number, cnt: number) => {
         connection.query('update items set stock = stock + ? where id = ?', [cnt, id],
             (err: MysqlError | null) => {
                 if (err) {
+                    console.error(err);
                     reject();
                 } else {
                     connection.query('insert into transactions(owner_id, item_id, transactionType, cnt) values (?, ?, ?, ?)',
@@ -312,10 +302,10 @@ const warehouseItem = (managerId: string, id: number, cnt: number) => {
     }));
 }
 
-const saleItem = (managerId: string, memberId: number, itemId: number, cnt: number) => {
+const saleItem = (managerId: string, memberId: number, itemId: number, cnt: number, isPresent?: boolean) => {
     return new Promise<boolean>(((resolve, reject) => {
         const query = 'insert into transactions(owner_id, member_id, item_id, transactionType, cnt) values(?, ?, ?, ?, ?)';
-        connection.query(query, [managerId, memberId, itemId, 'sale', cnt],
+        connection.query(query, [managerId, memberId, itemId, isPresent ? 'present' : 'sale', cnt],
             (err: MysqlError | null) => {
                 if (err) {
                     console.log(err);
@@ -328,7 +318,20 @@ const saleItem = (managerId: string, memberId: number, itemId: number, cnt: numb
                                 console.error(e2);
                                 reject();
                             } else {
-                                resolve(true);
+                                // 증정이면 회원 업데이트
+                                if (isPresent) {
+                                    const sql3 = 'update members set present = present +1 where member_id = ?';
+                                    connection.query(sql3, [memberId], (e3: MysqlError | null) => {
+                                        if (e3) {
+                                            console.error(e3);
+                                            reject()
+                                        } else {
+                                            resolve(true);
+                                        }
+                                    })
+                                } else {
+                                    resolve(true);
+                                }
                             }
                         });
                 }
@@ -338,7 +341,6 @@ const saleItem = (managerId: string, memberId: number, itemId: number, cnt: numb
 
 const getTransactions = (ownerId: string, keyword: string, page: number, rows: number, date: TransactionDate, itemId?: number, memberId?: number) => {
     return new Promise<ResTransactions>(((resolve, reject) => {
-        console.log(keyword);
         const startIdx = page * rows
         let query = `select tt.*, ii.name as itemName, ii.price
                      from (select t.id,
@@ -498,15 +500,35 @@ const getMember = (memberId: number) => {
     });
 }
 
+const getItem = (itemId: number) => {
+    return new Promise<ISingleItem>((resolve, reject) => {
+        const query = 'select * from items where id = ?';
+        connection.query(query, [itemId], (e: MysqlError | null, result: ISingleItem[]) => {
+            if (e) {
+                console.error(e);
+                reject();
+            } else {
+                if (result.length !== 0) {
+                    resolve(result[0]);
+                } else {
+                    reject();
+                }
+            }
+        });
+    });
+}
+
 const getPhoneNumbers = (members: number[]) => {
-    return new Promise<string[]>((resolve, reject)=>{
-        const query = `select phone from members where member_id in (${members.toString()})`;
-        connection.query(query, (e: MysqlError|null, result: {phone: string}[])=>{
-            if(e) {
+    return new Promise<string[]>((resolve, reject) => {
+        const query = `select phone
+                       from members
+                       where member_id in (${members.toString()})`;
+        connection.query(query, (e: MysqlError | null, result: { phone: string }[]) => {
+            if (e) {
                 reject();
             } else {
                 const finalResult: string[] = [];
-                result.forEach((re)=> {
+                result.forEach((re) => {
                     finalResult.push(re.phone.replace(/-/gi, ''));
                 })
                 resolve(finalResult);
@@ -514,20 +536,167 @@ const getPhoneNumbers = (members: number[]) => {
         })
     })
 }
-const getAllPhoneNumbers = () => {
-    return new Promise<string[]>((resolve, reject)=>{
-        const query = `select phone from members`;
-        connection.query(query, (e: MysqlError|null, result: {phone: string}[])=>{
-            if(e) {
+const getAllPhoneNumbers = (memberId: string) => {
+    return new Promise<string[]>((resolve, reject) => {
+        const query = `select phone
+                       from members
+                       where manager_id = ?`;
+        connection.query(query, [memberId], (e: MysqlError | null, result: { phone: string }[]) => {
+            if (e) {
                 reject();
             } else {
                 const finalResult: string[] = [];
-                result.forEach((re)=> {
+                result.forEach((re) => {
                     finalResult.push(re.phone.replace(/-/gi, ''));
                 })
                 resolve(finalResult);
             }
         })
+    });
+}
+
+// 회원 탈퇴
+const deleteMember = (memberId: number, managerId: string) => {
+    return new Promise((resolve, reject) => {
+        const query = 'delete from members where member_id =? and manager_id = ?';
+        connection.query(query, [memberId, managerId], (e: MysqlError | null) => {
+            if (e) {
+                console.error(e);
+                reject();
+            } else {
+                resolve(true);
+            }
+        });
+    });
+}
+
+const getPresentAbleMembers = (memberId: string, query: string) => {
+    return new Promise<ResMembers>((resolve, reject) => {
+        const sql = `select result.*
+                     from (select mmmmm.*, ttttt.cnt
+                           from (select mmmm.*, tttt.recent
+                                 from (select member_id,
+                                              name,
+                                              phone,
+                                              date_format(register_date, '%Y-%m-%d') as registerDate,
+                                              present
+                                       from members
+                                       where manager_id = 'mtsealove') mmmm
+                                          left outer join (
+                                     select group_concat(recent order by transactionDate desc) recent, member_id
+                                     from (select concat(name, '(', cnt, ')') as recent, member_id, transactionDate
+                                           from (select i.name, t.cnt, t.member_id, t.transactionDate
+                                                 from transactions t
+                                                          join items i on t.item_id = i.id) tt) ttt
+                                     group by member_id
+                                 ) tttt
+                                                          on mmmm.member_id = tttt.member_id) mmmmm
+                                    left outer join (select sum(cnt * (if(transactionType = 'sale', 1, -1))) cnt,
+                                                            member_id
+                                                     from (
+                                                              select t.*
+                                                              from (select sum(cnt) cnt, member_id, item_id, transactionType
+                                                                    from transactions
+                                                                    group by member_id, item_id, transactionType) t
+                                                                       join items i on i.id = t.item_id
+                                                              where i.type = 'liquid'
+                                                          ) tt
+                                                     group by member_id) ttttt
+                                                    on mmmmm.member_id = ttttt.member_id) result
+                              join (
+                         select tt.*
+                         from (select tt.*
+                               from (select m.*, t.cnt
+                                     from members m
+                                              join
+                                          (select sum(cnt) cnt, member_id
+                                           from (
+                                                    select t.*
+                                                    from transactions t
+                                                             join items i
+                                                                  on t.item_id = i.id
+                                                    where i.type = 'liquid'
+                                                ) t
+                                           where member_id is not null
+                                           group by member_id) t on m.member_id = t.member_id
+                                     where m.manager_id = '${memberId}') tt
+                               where cnt - present * 10 >= 10) tt
+                         where cnt - present * 10 >= 10) filtered
+                                   on result.member_id = filtered.member_id
+                     where result.name like '%${query}%'
+                        or result.phone like '%${query}%'`;
+        console.log(sql);
+        connection.query(sql, (err: MysqlError | null, results: IMember[]) => {
+            if (err) {
+                console.error(err);
+                reject();
+            } else {
+                console.log('request');
+                resolve({
+                    members: results,
+                    cnt: results.length
+                });
+            }
+        })
+    });
+}
+
+// 상품별 순위
+const getItemRank = (managerId: string, isMonth: boolean) => {
+    return new Promise<IItemCnt[]>((resolve, reject) => {
+        let format = '%Y-%m-%d';
+        if (isMonth) {
+            format = '%Y-%m';
+        }
+        const query = `select i.*, t.cnt
+                       from (select item_id, sum(cnt) cnt
+                             from transactions
+                             where date_format(transactionDate, ?) = date_format(now(), ?)
+                               and transactionType = 'sale'
+                             group by item_id) t
+                                join
+                            items i on t.item_id = i.id
+                       where owner_id = ?
+                       order by cnt desc limit 10`;
+        // console.log(query);
+        connection.query(query, [format, format, managerId],
+            (err: MysqlError | null, result: IItemCnt[]) => {
+                // console.log(result);
+                if (err) {
+                    console.error(err);
+                    reject();
+                } else {
+                    resolve(result);
+                }
+            });
+    })
+};
+
+const getRecentTransaction = (managerId: string) => {
+    return new Promise<IRecent[]>((resolve, reject) => {
+        const query = `select mm.name as memberName, tt.*
+                       from (select t.*, i.name as itemName, i.price
+                             from (select member_id,
+                                          item_id,
+                                          transactionType,
+                                          cnt,
+                                          date_format(transactionDate, '%Y-%m-%d %H:%i') transactionDate
+                                   from transactions
+                                   where owner_id = ?
+                                  ) t
+                                      join
+                                  items i on t.item_id = i.id) tt
+                                left outer join members mm
+                                                on tt.member_id = mm.member_id
+                       order by transactionDate desc limit 10`;
+        connection.query(query, [managerId], (err:MysqlError|null, results:IRecent[])=>{
+            if(err) {
+                console.error(err);
+                reject();
+            } else {
+                resolve(results);
+            }
+        });
     })
 }
 
@@ -549,5 +718,10 @@ export {
     getMember,
     getPhoneNumbers,
     getAllPhoneNumbers,
+    getItem,
+    deleteMember,
+    getPresentAbleMembers,
+    getItemRank,
+    getRecentTransaction,
 };
 
