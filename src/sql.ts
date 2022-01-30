@@ -1,6 +1,5 @@
 import {MysqlError,} from "mysql";
 import * as crypto from 'crypto';
-import {rejects} from "assert";
 
 const cryptoSecret = process.env.DB_SECRET;
 

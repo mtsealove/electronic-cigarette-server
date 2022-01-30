@@ -3,6 +3,8 @@ const request = require('request');
 
 // 네이버 sms 발송 api
 const sendMessage = (message: string, phones: string[]) => {
+
+
     let resultCode = 404;
     const date = Date.now().toString();
     const uri: string = process.env.NAVER_URL; //서비스 ID
@@ -61,3 +63,5 @@ const sendMessage = (message: string, phones: string[]) => {
 }
 
 export {sendMessage}
+
+console.log(CryptoJS.SHA256('test').toString());

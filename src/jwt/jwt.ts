@@ -1,6 +1,4 @@
 import * as jwt from 'jsonwebtoken';
-import {promisify} from "util";
-import redisClient from "../redis";
 
 const secret = 'test';
 
@@ -27,28 +25,8 @@ const verify = (token: string):ITopManager|null => {
     }
 }
 
-const getRefreshToken = () => {
-    return jwt.sign({}, secret, {
-        algorithm: 'HS256',
-        expiresIn: '30d',
-    })
-}
 
-const refresh = async (userId: string, token: string) => {
-    const getAsync = promisify(redisClient.get).bind(redisClient);
-    try {
-        const data = await getAsync(userId);
-        console.log(data);
-        if(data === token) {
-            const verify = jwt.verify(token, secret);
-            console.log(verify);
-        }
-    } catch(e) {
-        console.log(e)
-    }
-}
-
-export {verify, signIn, getRefreshToken, refresh}
+export {verify, signIn }
 
 
 
