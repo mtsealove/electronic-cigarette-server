@@ -11,6 +11,7 @@ declare namespace NodeJS {
         DB_PW: string;
         DB: string;
         DB_SECRET: string;
+        NODE_ENV: string;
     }
 }
 
@@ -102,6 +103,7 @@ declare interface IItem {
     price: number;
     type: ItemType;
     stock: number;
+    original_price: number;
 }
 
 declare interface IItemCnt extends IItem{
@@ -119,6 +121,8 @@ declare interface ITransaction {
     itemName: string;
     phone: string;
     price: number;
+    original_price: number;
+    payment_method: string;
 }
 
 declare interface ResTransactions {
@@ -173,4 +177,9 @@ declare interface IRecent {
     transactionDate: string;
     itemName: string;
     price: string;
+}
+
+declare interface IWarehousePrice {
+    daily: number;
+    monthly: number;
 }

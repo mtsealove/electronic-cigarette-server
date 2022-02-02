@@ -31,7 +31,7 @@ const topLogin = (id: string, pw: string): Promise<ITopManager> => {
 const login = (id: string, pw: string) => {
     return new Promise<ITopManager>(((resolve, reject) => {
         const hashed = crypto.createHmac('sha256', cryptoSecret).update(pw).digest('hex');
-        // console.log(hashed);
+        console.log('update:', hashed);
         connection.query('select user_id, name, seq from managers where user_id = ? and password = ?',
             [id, hashed], (err: MysqlError | null, results: ITopManager[]) => {
                 if (err) {
@@ -151,7 +151,7 @@ const getMembers = (managerId: string, page: number, rows: number, query?: strin
                                                   ) tt
                                              group by member_id) ttttt
                                             on mmmmm.member_id = ttttt.member_id
-                   order by member_id desc limit ?, ?`;
+                   order by registerDate desc limit ?, ?`;
         const values = [managerId, startIdx, Number(rows)];
         if (query) {
             sql = `select mmmmm.*, ttttt.cnt
@@ -222,7 +222,7 @@ const getMembers = (managerId: string, page: number, rows: number, query?: strin
 const getItems = (managerId: string, page: number, rows: number, sort: SortBy, sortType: SortType, query?: string, itemType?: ItemType) => (
     new Promise<ResItems>(((resolve, reject) => {
         const startIdx = page * rows
-        let sql = `select id, name, price, type, stock
+        let sql = `select id, name, price, type, stock, original_price
                    from items
                    where owner_id = '${managerId}'`;
         if (query) {
@@ -265,9 +265,10 @@ const getItems = (managerId: string, page: number, rows: number, sort: SortBy, s
     }))
 );
 
-const postItem = (managerId: string, name: string, price: string, type: string) => (
+const postItem = (managerId: string, name: string, price: string, type: string, original_price: number) => (
     new Promise<boolean>(((resolve, reject) => {
-        connection.query('insert into items(owner_id, name, price, type) values(?, ?, ?, ?)', [managerId, name, price, type],
+        connection.query('insert into items(owner_id, name, price, type, original_price) values(?, ?, ?, ?, ?)'
+            , [managerId, name, price, type, original_price],
             (err: MysqlError | null) => {
                 if (err) {
                     console.log(err);
@@ -301,10 +302,11 @@ const warehouseItem = (managerId: string, id: number, cnt: number) => {
     }));
 }
 
-const saleItem = (managerId: string, memberId: number, itemId: number, cnt: number, isPresent?: boolean) => {
+const saleItem = (managerId: string, memberId: number, itemId: number, cnt: number, paymentMethod: string, isPresent?: boolean) => {
     return new Promise<boolean>(((resolve, reject) => {
-        const query = 'insert into transactions(owner_id, member_id, item_id, transactionType, cnt) values(?, ?, ?, ?, ?)';
-        connection.query(query, [managerId, memberId, itemId, isPresent ? 'present' : 'sale', cnt],
+        const query = 'insert into transactions(owner_id, member_id, item_id, transactionType, cnt, payment_method) values(?, ?, ?, ?, ?, ?)';
+        const method = isPresent ? 'none' : paymentMethod;
+        connection.query(query, [managerId, memberId, itemId, isPresent ? 'present' : 'sale', cnt, method],
             (err: MysqlError | null) => {
                 if (err) {
                     console.log(err);
@@ -341,12 +343,13 @@ const saleItem = (managerId: string, memberId: number, itemId: number, cnt: numb
 const getTransactions = (ownerId: string, keyword: string, page: number, rows: number, date: TransactionDate, itemId?: number, memberId?: number) => {
     return new Promise<ResTransactions>(((resolve, reject) => {
         const startIdx = page * rows
-        let query = `select tt.*, ii.name as itemName, ii.price
+        let query = `select tt.*, ii.name as itemName, ii.price, ii.original_price
                      from (select t.id,
                                   t.member_id,
                                   t.item_id,
                                   t.transactionType,
                                   t.cnt,
+                                  t.payment_method,
                                   date_format(t.transactionDate, '%Y-%m-%d %H:%i') as transactionDate,
                                   m.name                                           as memberName,
                                   m.phone
@@ -688,14 +691,81 @@ const getRecentTransaction = (managerId: string) => {
                                 left outer join members mm
                                                 on tt.member_id = mm.member_id
                        order by transactionDate desc limit 10`;
-        connection.query(query, [managerId], (err:MysqlError|null, results:IRecent[])=>{
-            if(err) {
+        connection.query(query, [managerId], (err: MysqlError | null, results: IRecent[]) => {
+            if (err) {
                 console.error(err);
                 reject();
             } else {
                 resolve(results);
             }
         });
+    })
+}
+
+const verifyPin = (managerId: string, pin: string) => {
+    return new Promise<boolean>((resolve, reject) => {
+        const query = 'select count(*) cnt from managers where user_id = ? and pin = ?';
+        connection.query(query, [managerId, pin], (err: MysqlError, result: any[]) => {
+            if (err) {
+                console.error(err);
+                reject();
+            } else {
+                const {cnt} = result[0];
+                if (cnt === 1) {
+                    resolve(true);
+                } else {
+                    reject();
+                }
+            }
+        })
+    })
+}
+
+const updatePin = (managerId: string, pin: string) => {
+    return new Promise<boolean>((resolve, reject) => {
+        const query = 'update managers set pin = ? where user_id = ?';
+        connection.query(query, [pin, managerId], (err: MysqlError | null) => {
+            if (err) {
+                console.error(err);
+                reject();
+            } else {
+                resolve(true);
+            }
+        })
+    })
+}
+
+const getWarehousePrice = (managerId: string) => {
+    return new Promise<IWarehousePrice>((resolve, reject) => {
+        const query = `select sum(price) price
+                       from (
+                                select t.cnt * i.original_price as price
+                                from (
+                                         select *
+                                         from transactions
+                                         where owner_id = ?
+                                           and transactionType = 'warehouse'
+                                           and date_format(transactionDate, ?) = date_format(now(), ?)
+                                     ) t
+                                         join items i on t.item_id = i.id) tt`;
+        connection.query(query, [managerId, '%Y-%m-%d', '%Y-%m-%d'], (err:MysqlError|null, r0: any[])=>{
+            if(err) {
+                console.error(err);
+                reject();
+            } else {
+                connection.query(query, [managerId, '%Y-%m', '%Y-%m'], (e1: MysqlError|null, r1: any[])=>{
+                    if(e1) {
+                        console.error(e1);
+                        reject();
+                    } else {
+                        resolve({
+                            daily: r0[0].price,
+                            monthly: r1[0].price,
+                        });
+                    }
+                })
+            }
+        })
     })
 }
 
@@ -722,5 +792,8 @@ export {
     getPresentAbleMembers,
     getItemRank,
     getRecentTransaction,
+    verifyPin,
+    updatePin,
+    getWarehousePrice,
 };
 

@@ -7,10 +7,12 @@ import * as naver from './naverSms';
 const app = express();
 const cors = require('cors');
 
+const corsDomain = process.env.NODE_ENV !== 'production' ? 'http://localhost:3000':'http://3.34.83.95';
+
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
 app.use(cors({
-    origin: 'http://localhost:3000',
+    origin: corsDomain,
     credentials: true,
 }));
 
@@ -90,6 +92,7 @@ app.get('/top/stores', authJWT, (req: express.Request<IRequest>, res: express.Re
 // 관리자 로그인
 app.post('/login', async (req: express.Request, res: express.Response) => {
     const {id, pw} = req.body;
+    console.log(req.body);
     try {
         const result: ITopManager = await sql.login(id, pw);
         // 로그인 성공
@@ -111,6 +114,38 @@ app.post('/login', async (req: express.Request, res: express.Response) => {
     }
 })
 
+//  2차 비밀번호
+app.post('/verify',authJWT, (req: express.Request<IRequest>,res: express.Response)=>{
+    const {pin} = req.body;
+    const  {user_id} = req.params;
+    if(user_id) {
+        console.log(pin);
+        sql.verifyPin(user_id, pin)
+            .then(()=>{
+                res.status(200).json(true);
+            }).catch(()=>{
+                res.status(401).json(false);
+        })
+    } else {
+        res.status(401).json(false);
+    }
+})
+
+// 2차 비밀번호 변경
+app.post('/update/pin', authJWT, (req: express.Request<IRequest>, res: express.Response)=> {
+    const {user_id} = req.params;
+    const {pin} = req.body;
+    if(user_id) {
+        sql.updatePin(user_id, pin).then(()=>{
+            res.status(200).json(true);
+        }).catch(()=>{
+            res.status(500).json(false);
+        })
+    } else {
+        res.status(401).json(false);
+    }
+})
+
 app.get('/auth', (req: express.Request<{}, {}, {}, ReqAuth>, res: express.Response) => {
     const token: string = req.query.token;
     const vf = jwt.verify(token);
@@ -120,6 +155,20 @@ app.get('/auth', (req: express.Request<{}, {}, {}, ReqAuth>, res: express.Respon
         res.status(400).json({message: 'auth fail'});
     }
 });
+
+app.get('/warehouse/price', authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
+    const {user_id} = req.params;
+    if(user_id) {
+        sql.getWarehousePrice(user_id)
+            .then((result)=>{
+                res.status(200).json(result);
+            }).catch(()=>{
+            res.status(500).json(false);
+        });
+    } else {
+        res.status(401).json(false);
+    }
+})
 
 // 회원 등록
 app.post('/members', authJWT, async (req: express.Request<IRequest>, res: express.Response) => {
@@ -135,6 +184,7 @@ app.post('/members', authJWT, async (req: express.Request<IRequest>, res: expres
         res.status(500).json(false);
     }
 });
+
 
 // 회원 탈퇴
 app.post('/members/delete', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
@@ -194,9 +244,9 @@ app.get('/members/:memberId', authJWT, async (req: express.Request<IMemberReques
 // 상품 조회
 app.post('/items', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
-    const {name, price, type} = req.body;
+    const {name, price, type, original_price} = req.body;
     if (user_id) {
-        sql.postItem(user_id, name, price, type)
+        sql.postItem(user_id, name, price, type, original_price)
             .then(() => {
                 res.status(200).json(true);
             }).catch(() => {
@@ -273,8 +323,8 @@ app.post('/items/warehouse', authJWT, (req: express.Request<IRequest>, res: expr
 app.post('/items/sale', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
     if (user_id) {
-        const {memberId, itemId, cnt, isPresent} = req.body;
-        sql.saleItem(user_id, memberId, itemId, cnt, isPresent)
+        const {memberId, itemId, cnt, isPresent, paymentMethod} = req.body;
+        sql.saleItem(user_id, memberId, itemId, cnt, paymentMethod ,isPresent)
             .then(() => res.status(200).json(true))
             .catch(() => res.status(400).json(false));
     }
