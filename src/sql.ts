@@ -74,6 +74,7 @@ const checkIdDuplicate = (id: string): Promise<boolean> => {
     }));
 }
 
+
 // 매장 추가
 const addStore = (id: string, pw: string, seq: number, name: string, addr: string) => {
     return new Promise<boolean>(((resolve, reject) => {
@@ -105,7 +106,6 @@ const getStores = (seq: number) => {
 }
 
 // 회원 등록
-//# member_id, manager_id, name, phone, register_date
 const postMember = (managerId: string, name: string, phone: string, registerDate: string) => {
     return new Promise(((resolve, reject) => {
         connection.query('insert into members(manager_id, name, phone, register_date) values(?, ?, ?, ?)',
@@ -218,13 +218,27 @@ const getMembers = (managerId: string, page: number, rows: number, query?: strin
     }))
 );
 
+const postItem = (managerId: string, name: string, price: string, type: string, original_price: number) => (
+    new Promise<boolean>(((resolve, reject) => {
+        connection.query('insert into items(owner_id, name, price, type, original_price) values(?, ?, ?, ?, ?)'
+            , [managerId, name, price, type, original_price],
+            (err: MysqlError | null) => {
+                if (err) {
+                    console.log(err);
+                    reject();
+                } else {
+                    resolve(true);
+                }
+            });
+    }))
+);
 
 const getItems = (managerId: string, page: number, rows: number, sort: SortBy, sortType: SortType, query?: string, itemType?: ItemType) => (
     new Promise<ResItems>(((resolve, reject) => {
         const startIdx = page * rows
         let sql = `select id, name, price, type, stock, original_price
                    from items
-                   where owner_id = '${managerId}'`;
+                   where owner_id = '${managerId}' and !deprecated `;
         if (query) {
             sql += ` and name like '%${query}%'`;
         }
@@ -265,20 +279,45 @@ const getItems = (managerId: string, page: number, rows: number, sort: SortBy, s
     }))
 );
 
-const postItem = (managerId: string, name: string, price: string, type: string, original_price: number) => (
-    new Promise<boolean>(((resolve, reject) => {
-        connection.query('insert into items(owner_id, name, price, type, original_price) values(?, ?, ?, ?, ?)'
-            , [managerId, name, price, type, original_price],
-            (err: MysqlError | null) => {
-                if (err) {
-                    console.log(err);
-                    reject();
-                } else {
-                    resolve(true);
-                }
-            });
-    }))
-);
+const changeItem = (managerId: string, itemId: number, price: number, ogPrice: number) => {
+    return new Promise<boolean>((resolve, reject) => {
+        const getQuery = 'select * from items where id = ? and owner_id =?';
+        const updateQuery = 'update items set deprecated = true, stock = 0 where id = ? and owner_id =?';
+        const insertQuery = 'insert into items(owner_id, name, price, type, stock, original_price, deprecated) values(?,?,?,?,?,?,?)';
+        connection.query(getQuery, [itemId, managerId], (e0: MysqlError|null, result: any[])=>{
+            if(e0) {
+                console.log('e0')
+                console.error(e0);
+                reject();
+            } else if(result.length!==0)  {
+                const {type, name, stock} = result[0];
+                connection.query(insertQuery, [managerId, name, price, type, stock, ogPrice, false], (e1:MysqlError|null)=>{
+                    if(e1) {
+                        console.error('e1');
+                        console.error(e1);
+                        reject();
+                    } else {
+                        connection.query(updateQuery, [itemId, managerId], (e2: MysqlError|null)=> {
+                            if(e2) {
+                                console.error(e2);
+                                reject();
+                            } else {
+                                resolve(true);
+                            }
+                        })
+                    }
+                })
+            } else {
+                console.log('not found')
+                reject();
+            }
+        })
+    });
+}
+
+const updateItem = () => {
+    console.log('update item');
+}
 
 const warehouseItem = (managerId: string, id: number, cnt: number) => {
     return new Promise(((resolve, reject) => {
@@ -427,13 +466,6 @@ const getTransactions = (ownerId: string, keyword: string, page: number, rows: n
     }));
 }
 
-type transactionValues = {
-    owner_id: string;
-    member_id: number;
-    item_id: number;
-    cnt: number;
-    transactionType: string;
-}
 
 const cancelTransaction = (transactionId: number) => {
     return new Promise<boolean>(((resolve, reject) => {
@@ -443,7 +475,7 @@ const cancelTransaction = (transactionId: number) => {
         const query1 = 'insert into transactions(owner_id,  member_id, item_id, transactionType, cnt) values(?, ?, ?, ?, ?)';
         const query2 = 'select cnt, item_id from transactions where id = ?';
         const query3 = 'update items set stock = stock + ? where id = ?';
-        connection.query(query0, [transactionId], (e0: MysqlError | null, result1: transactionValues[]) => {
+        connection.query(query0, [transactionId], (e0: MysqlError | null, result1: any[]) => {
             if (e0) {
                 console.error(e0);
                 reject();
@@ -748,13 +780,13 @@ const getWarehousePrice = (managerId: string) => {
                                            and date_format(transactionDate, ?) = date_format(now(), ?)
                                      ) t
                                          join items i on t.item_id = i.id) tt`;
-        connection.query(query, [managerId, '%Y-%m-%d', '%Y-%m-%d'], (err:MysqlError|null, r0: any[])=>{
-            if(err) {
+        connection.query(query, [managerId, '%Y-%m-%d', '%Y-%m-%d'], (err: MysqlError | null, r0: any[]) => {
+            if (err) {
                 console.error(err);
                 reject();
             } else {
-                connection.query(query, [managerId, '%Y-%m', '%Y-%m'], (e1: MysqlError|null, r1: any[])=>{
-                    if(e1) {
+                connection.query(query, [managerId, '%Y-%m', '%Y-%m'], (e1: MysqlError | null, r1: any[]) => {
+                    if (e1) {
                         console.error(e1);
                         reject();
                     } else {
@@ -767,33 +799,38 @@ const getWarehousePrice = (managerId: string) => {
             }
         })
     })
+};
+
+const remakeItem  = () => {
+    return new Promise<boolean>(((resolve, reject) => {
+        resolve(true)
+    }))
 }
 
 export {
-    topLogin,
-    checkIdDuplicate,
     addStore,
-    getStores,
-    updateLoginInfo,
-    login,
-    postMember,
-    getMembers,
+    updateItem,
+    changeItem,
     postItem,
     getItems,
     warehouseItem,
-    saleItem,
-    getTransactions,
-    cancelTransaction,
-    getMember,
-    getPhoneNumbers,
-    getAllPhoneNumbers,
-    getItem,
-    deleteMember,
-    getPresentAbleMembers,
-    getItemRank,
-    getRecentTransaction,
-    verifyPin,
-    updatePin,
     getWarehousePrice,
-};
+    updatePin,
+    getItemRank,
+    getTransactions,
+    getRecentTransaction,
+    getPresentAbleMembers,
+    getMembers,
+    getItem,
+    getAllPhoneNumbers,
+    getPhoneNumbers,
+    getMember,
+    getStores,
+    postMember,
+    updateLoginInfo,
+    checkIdDuplicate,
+    cancelTransaction, verifyPin,
+    deleteMember, login, topLogin, saleItem,
+    remakeItem,
+}
 

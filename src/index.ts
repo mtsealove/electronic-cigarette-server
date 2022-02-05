@@ -1,13 +1,13 @@
 import express from 'express';
 import * as jwt from './jwt/jwt';
 import authJWT from "./authJwt";
-import * as sql from './sql';
 import * as naver from './naverSms';
+import * as sql from'./sql';
 
 const app = express();
 const cors = require('cors');
 
-const corsDomain = process.env.NODE_ENV !== 'production' ? 'http://localhost:3000':'http://3.34.83.95';
+const corsDomain = process.env.NODE_ENV !== 'production' ? 'http://localhost:3000' : 'http://52.79.100.182';
 
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
@@ -115,16 +115,16 @@ app.post('/login', async (req: express.Request, res: express.Response) => {
 })
 
 //  2차 비밀번호
-app.post('/verify',authJWT, (req: express.Request<IRequest>,res: express.Response)=>{
+app.post('/verify', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {pin} = req.body;
-    const  {user_id} = req.params;
-    if(user_id) {
+    const {user_id} = req.params;
+    if (user_id) {
         console.log(pin);
         sql.verifyPin(user_id, pin)
-            .then(()=>{
+            .then(() => {
                 res.status(200).json(true);
-            }).catch(()=>{
-                res.status(401).json(false);
+            }).catch(() => {
+            res.status(401).json(false);
         })
     } else {
         res.status(401).json(false);
@@ -132,13 +132,13 @@ app.post('/verify',authJWT, (req: express.Request<IRequest>,res: express.Respons
 })
 
 // 2차 비밀번호 변경
-app.post('/update/pin', authJWT, (req: express.Request<IRequest>, res: express.Response)=> {
+app.post('/update/pin', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
     const {pin} = req.body;
-    if(user_id) {
-        sql.updatePin(user_id, pin).then(()=>{
+    if (user_id) {
+        sql.updatePin(user_id, pin).then(() => {
             res.status(200).json(true);
-        }).catch(()=>{
+        }).catch(() => {
             res.status(500).json(false);
         })
     } else {
@@ -156,13 +156,13 @@ app.get('/auth', (req: express.Request<{}, {}, {}, ReqAuth>, res: express.Respon
     }
 });
 
-app.get('/warehouse/price', authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
+app.get('/warehouse/price', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
-    if(user_id) {
+    if (user_id) {
         sql.getWarehousePrice(user_id)
-            .then((result)=>{
+            .then((result) => {
                 res.status(200).json(result);
-            }).catch(()=>{
+            }).catch(() => {
             res.status(500).json(false);
         });
     } else {
@@ -207,12 +207,12 @@ app.post('/members/delete', authJWT, (req: express.Request<IRequest>, res: expre
 app.get('/members', authJWT, async (req: express.Request<IRequest, {}, {}, ReqMembers>, res: express.Response) => {
     const {page, rows, query, isPresent} = req.query;
     if (req.params.user_id) {
-        if(isPresent) {
-            sql.getPresentAbleMembers(req.params.user_id, query||'')
-                .then((result)=>{
+        if (isPresent) {
+            sql.getPresentAbleMembers(req.params.user_id, query || '')
+                .then((result) => {
                     res.status(200).json(result);
-                }).catch(()=>{
-                    res.status(400).json([]);
+                }).catch(() => {
+                res.status(400).json([]);
             })
         } else {
             sql.getMembers(req.params.user_id, page, rows, query).then((result) => {
@@ -241,7 +241,7 @@ app.get('/members/:memberId', authJWT, async (req: express.Request<IMemberReques
     }
 })
 
-// 상품 조회
+// 상품 등록
 app.post('/items', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
     const {name, price, type, original_price} = req.body;
@@ -256,6 +256,22 @@ app.post('/items', authJWT, (req: express.Request<IRequest>, res: express.Respon
         res.status(400).json(false);
     }
 });
+
+app.post('/item/update', authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
+    const {itemId, price, originalPrice} = req.body;
+    const {user_id} = req.params;
+    if(user_id) {
+        sql.changeItem(user_id, itemId, price,originalPrice)
+            .then(()=>{
+                res.status(200).json(true);
+            })
+            .catch(()=>{
+                res.status(500).json(false);
+            })
+    } else {
+        res.status(401).json(false);
+    }
+})
 
 // 특정 상품 조회
 app.get('/items/:itemId', authJWT, (req: express.Request<IItemRequest>, res: express.Response) => {
@@ -274,15 +290,15 @@ app.get('/items/:itemId', authJWT, (req: express.Request<IItemRequest>, res: exp
 
 // 일|월별 판매 순위
 //@ts-ignore
-app.get('/rank/items', authJWT, async (req: express.Request<IRequest, {}, {}, ReqItemRank>, res: express.Response)=>{
+app.get('/rank/items', authJWT, async (req: express.Request<IRequest, {}, {}, ReqItemRank>, res: express.Response) => {
     const {user_id} = req.params;
-    if(user_id) {
+    if (user_id) {
         const {isMonth} = req.query;
         sql.getItemRank(user_id, isMonth === 'true')
-            .then((result)=>{
+            .then((result) => {
                 res.status(200).json(result);
             })
-            .catch(()=>{
+            .catch(() => {
                 res.json(405).json(false);
             });
     } else {
@@ -324,7 +340,7 @@ app.post('/items/sale', authJWT, (req: express.Request<IRequest>, res: express.R
     const {user_id} = req.params;
     if (user_id) {
         const {memberId, itemId, cnt, isPresent, paymentMethod} = req.body;
-        sql.saleItem(user_id, memberId, itemId, cnt, paymentMethod ,isPresent)
+        sql.saleItem(user_id, memberId, itemId, cnt, paymentMethod, isPresent)
             .then(() => res.status(200).json(true))
             .catch(() => res.status(400).json(false));
     }
@@ -367,6 +383,7 @@ app.post('/send/message', authJWT, async (req: express.Request<IRequest>, res: e
         // 회원 ID 목록의 데이터가 존재하지 않으면 전체 발송
         if (members.length === 0) {
             const fetch = await sql.getAllPhoneNumbers(req.params.user_id);
+            naver.sendMessage(message, fetch);
             res.status(200).json(true);
         } else {  //  특정 회원 ID 선택 발송
             const fetch = await sql.getPhoneNumbers(members);
@@ -379,14 +396,14 @@ app.post('/send/message', authJWT, async (req: express.Request<IRequest>, res: e
 });
 
 // 최근 거래
-app.get('/recent', authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
+app.get('/recent', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
-    if(user_id) {
+    if (user_id) {
         sql.getRecentTransaction(user_id)
-            .then((result)=>{
+            .then((result) => {
                 res.status(200).json(result);
-            }).catch(()=>{
-                res.status(400).json(false);
+            }).catch(() => {
+            res.status(400).json(false);
         })
     } else {
         res.status(401).json(false);
