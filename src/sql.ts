@@ -419,25 +419,33 @@ const getTransactions = (ownerId: string, keyword: string, page: number, rows: n
             }
         }
 
-        query += ` order by id desc limit ?, ?`;
-        connection.query(query, [ownerId, startIdx, Number(rows)], (err: MysqlError | null, result: ITransaction[]) => {
-            if (err) {
-                console.error(err);
+
+        connection.query(query, [ownerId], (e0: MysqlError|null, r0: ITransaction[])=>{
+            if(e0){
+                console.error(e0);
                 reject();
             } else {
-                let price = 0;
-                result.forEach((rs) => {
-                    if (rs.transactionType === 'sale') {
-                        price += rs.price;
-                    } else if (rs.transactionType === 'refund') {
-                        price -= rs.price;
+                query += ` order by id desc limit ?, ?`;
+                connection.query(query, [ownerId, startIdx, Number(rows)], (err: MysqlError | null, result: ITransaction[]) => {
+                    if (err) {
+                        console.error(err);
+                        reject();
+                    } else {
+                        let price = 0;
+                        result.forEach((rs) => {
+                            if (rs.transactionType === 'sale') {
+                                price += rs.price;
+                            } else if (rs.transactionType === 'refund') {
+                                price -= rs.price;
+                            }
+                        })
+                        resolve({
+                            cnt: r0.length,
+                            transactions: result,
+                            price,
+                        });
                     }
                 })
-                resolve({
-                    cnt: result.length,
-                    transactions: result,
-                    price,
-                });
             }
         })
     }));
