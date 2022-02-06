@@ -261,7 +261,7 @@ app.post('/item/update', authJWT, (req: express.Request<IRequest>, res: express.
     const {itemId, price, originalPrice} = req.body;
     const {user_id} = req.params;
     if(user_id) {
-        sql.changeItem(user_id, itemId, price,originalPrice)
+        sql.updateItem(user_id, itemId, price,originalPrice)
             .then(()=>{
                 res.status(200).json(true);
             })
@@ -339,8 +339,8 @@ app.post('/items/warehouse', authJWT, (req: express.Request<IRequest>, res: expr
 app.post('/items/sale', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
     if (user_id) {
-        const {memberId, itemId, cnt, isPresent, paymentMethod} = req.body;
-        sql.saleItem(user_id, memberId, itemId, cnt, paymentMethod, isPresent)
+        const {memberId, itemId, cnt, isPresent, paymentMethod, price} = req.body;
+        sql.saleItem(user_id, memberId, itemId, cnt, paymentMethod, price, isPresent)
             .then(() => res.status(200).json(true))
             .catch(() => res.status(400).json(false));
     }
@@ -354,6 +354,7 @@ app.get('/transactions', authJWT, (req: express.Request<IRequest, {}, {}, ReqTra
 
     if (user_id) {
         sql.getTransactions(user_id, query, page, rows, date, itemId, memberId).then((data) => {
+            console.log(data);
             res.status(200).json(data);
         }).catch(() => {
             res.status(400).json(false);
