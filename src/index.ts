@@ -2,7 +2,7 @@ import express from 'express';
 import * as jwt from './jwt/jwt';
 import authJWT from "./authJwt";
 import * as naver from './naverSms';
-import * as sql from'./sql';
+import * as sql from './sql';
 
 const app = express();
 const cors = require('cors');
@@ -157,6 +157,19 @@ app.get('/auth', (req: express.Request<{}, {}, {}, ReqAuth>, res: express.Respon
     }
 });
 
+// 매출 조회
+//@ts-ignore
+app.get('/earning',authJWT, (req: express.Request<IRequest, {}, {}, ReqEarning>, res: express.Response)=>{
+    const {user_id} = req.params;
+    const {type, row, page} = req.query;
+    sql.getEarning(user_id!, type, page, row)
+        .then((result)=>{
+            res.status(200).json(result);
+        }).catch(()=>{
+            res.status(500).json(false);
+    })
+})
+
 app.get('/warehouse/price', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
     if (user_id) {
@@ -202,6 +215,18 @@ app.post('/members/delete', authJWT, (req: express.Request<IRequest>, res: expre
         res.status(400).json(false);
     }
 });
+
+// 회원 수정
+app.post('/members/update', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
+    const {user_id} = req.params;
+    const {memberId, name, phone} = req.body;
+    sql.updateMember(memberId, user_id!, name,phone)
+        .then(() => {
+            res.status(200).json(true);
+        }).catch(() => {
+        res.status(500).json(false);
+    })
+})
 
 
 // @ts-ignore
@@ -258,15 +283,15 @@ app.post('/items', authJWT, (req: express.Request<IRequest>, res: express.Respon
     }
 });
 
-app.post('/item/update', authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
-    const {itemId, price, originalPrice} = req.body;
+app.post('/item/update', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
+    const {itemId, price, originalPrice, name, stock} = req.body;
     const {user_id} = req.params;
-    if(user_id) {
-        sql.updateItem(user_id, itemId, price,originalPrice)
-            .then(()=>{
+    if (user_id) {
+        sql.updateItem(user_id, itemId, price, originalPrice, name, stock)
+            .then(() => {
                 res.status(200).json(true);
             })
-            .catch(()=>{
+            .catch(() => {
                 res.status(500).json(false);
             })
     } else {
@@ -340,8 +365,8 @@ app.post('/items/warehouse', authJWT, (req: express.Request<IRequest>, res: expr
 app.post('/items/sale', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
     if (user_id) {
-        const {memberId, itemId, cnt, isPresent, paymentMethod, price} = req.body;
-        sql.saleItem(user_id, memberId, itemId, cnt, paymentMethod, price, isPresent)
+        const {memberId, itemId, cnt, isPresent, paymentMethod, price, time} = req.body;
+        sql.saleItem(user_id, memberId, itemId, cnt, paymentMethod, price, time.replace(/T/gi, ' ') ,isPresent)
             .then(() => res.status(200).json(true))
             .catch(() => res.status(400).json(false));
     }
@@ -410,7 +435,8 @@ app.get('/recent', authJWT, (req: express.Request<IRequest>, res: express.Respon
     } else {
         res.status(401).json(false);
     }
-})
+});
+
 
 app.listen(4000, () => {
     console.log('server running');

@@ -1,5 +1,6 @@
 import {MysqlError,} from "mysql";
 import * as crypto from 'crypto';
+import {query} from "express";
 
 const cryptoSecret = process.env.DB_SECRET;
 
@@ -254,7 +255,9 @@ const getItems = (managerId: string, page: number, rows: number, sort: SortBy, s
                 } else {
                     let sql2 = `select count(id) as cnt
                                 from items
-                                where name like '%%'`;
+                                where name like '%%'
+                                  and owner_id = '${managerId}'
+                                  and deprecated = false `;
                     if (query) {
                         sql2 += ` and name like '%${query}%'`;
                     }
@@ -279,11 +282,11 @@ const getItems = (managerId: string, page: number, rows: number, sort: SortBy, s
     }))
 );
 
-const updateItem = (managerId: string, itemId: number, price: number, ogPrice: number) => {
+const updateItem = (managerId: string, itemId: number, price: number, ogPrice: number, name: string, stock: number) => {
     return new Promise<boolean>((resolve, reject) => {
-        const query = 'update items set price = ?, original_price = ? where id = ? and owner_id =?';
-        connection.query(query, [price, ogPrice, itemId, managerId], (err: MysqlError|null)=>{
-            if(err) {
+        const query = 'update items set price = ?, original_price = ?, name =? , stock = ? where id = ? and owner_id =?';
+        connection.query(query, [price, ogPrice, name, stock, itemId, managerId], (err: MysqlError | null) => {
+            if (err) {
                 console.error(err);
                 reject();
             } else {
@@ -316,12 +319,12 @@ const warehouseItem = (managerId: string, id: number, cnt: number) => {
     }));
 }
 
-const saleItem = (managerId: string, memberId: number, itemId: number, cnt: number, paymentMethod: string, price: number,isPresent?: boolean) => {
+const saleItem = (managerId: string, memberId: number, itemId: number, cnt: number, paymentMethod: string, price: number, time: string, isPresent?: boolean) => {
     return new Promise<boolean>(((resolve, reject) => {
-        const query = 'insert into transactions(owner_id, member_id, item_id, transactionType, cnt, payment_method, price) values(?, ?, ?, ?, ?, ?, ?)';
+        const query = 'insert into transactions(owner_id, member_id, item_id, transactionType, cnt, payment_method, price, transactionDate) values(?, ?, ?, ?, ?, ?, ?, ?)';
         const method = isPresent ? 'none' : paymentMethod;
-        const cntPrice = cnt* price;
-        connection.query(query, [managerId, memberId, itemId, isPresent ? 'present' : 'sale', cnt, method,cntPrice],
+        const cntPrice = cnt * price;
+        connection.query(query, [managerId, memberId, itemId, isPresent ? 'present' : 'sale', cnt, method, cntPrice, time],
             (err: MysqlError | null) => {
                 if (err) {
                     console.log(err);
@@ -365,7 +368,7 @@ const getTransactions = (ownerId: string, keyword: string, page: number, rows: n
                                   t.transactionType,
                                   t.cnt,
                                   t.payment_method,
-                                  t.price, 
+                                  t.price,
                                   date_format(t.transactionDate, '%Y-%m-%d %H:%i') as transactionDate,
                                   m.name                                           as memberName,
                                   m.phone
@@ -420,12 +423,12 @@ const getTransactions = (ownerId: string, keyword: string, page: number, rows: n
         }
 
 
-        connection.query(query, [ownerId], (e0: MysqlError|null, r0: ITransaction[])=>{
-            if(e0){
+        connection.query(query, [ownerId], (e0: MysqlError | null, r0: ITransaction[]) => {
+            if (e0) {
                 console.error(e0);
                 reject();
             } else {
-                query += ` order by id desc limit ?, ?`;
+                query += ` order by transactionDate desc limit ?, ?`;
                 connection.query(query, [ownerId, startIdx, Number(rows)], (err: MysqlError | null, result: ITransaction[]) => {
                     if (err) {
                         console.error(err);
@@ -454,44 +457,30 @@ const getTransactions = (ownerId: string, keyword: string, page: number, rows: n
 
 const cancelTransaction = (transactionId: number) => {
     return new Promise<boolean>(((resolve, reject) => {
-        const query0 = `select *
-                        from transactions
-                        where id = ?`
-        const query1 = 'insert into transactions(owner_id,  member_id, item_id, transactionType, cnt) values(?, ?, ?, ?, ?)';
-        const query2 = 'select cnt, item_id from transactions where id = ?';
-        const query3 = 'update items set stock = stock + ? where id = ?';
-        connection.query(query0, [transactionId], (e0: MysqlError | null, result1: any[]) => {
-            if (e0) {
-                console.error(e0);
+
+        const query1 = 'select cnt, item_id from transactions where id = ?';
+        const query2 = 'update items set stock = stock + ? where id = ?';
+        const query3 = 'delete from transactions where id = ?';
+
+        connection.query(query1, [transactionId], (e1: MysqlError | null, r1: any[]) => {
+            if (e1) {
+                console.error(e1);
                 reject();
             } else {
-                const {owner_id, member_id, item_id, cnt, transactionType} = result1[0];
-                let newTransaction = 'cancel';
-                if (transactionType === 'sale') {
-                    newTransaction = 'refund';
-                }
-
-                connection.query(query1, [owner_id, member_id, item_id, newTransaction, cnt], (e1: MysqlError | null) => {
-                    if (e1) {
-                        console.error(e1);
+                const {item_id, cnt} = r1[0];
+                connection.query(query2, [cnt, item_id], (e2: MysqlError | null) => {
+                    if (e2) {
+                        console.error(e2);
                         reject();
                     } else {
-                        connection.query(query2, [transactionId], (e2: MysqlError | null, result: { cnt: number, item_id: number }[]) => {
-                            if (e2) {
-                                console.error(e2);
+                        connection.query(query3, [transactionId], (e3: MysqlError | null) => {
+                            if (e3) {
+                                console.error(e3);
                                 reject();
                             } else {
-                                const {cnt, item_id} = result[0];
-                                connection.query(query3, [cnt, item_id], (e3: MysqlError | null) => {
-                                    if (e3) {
-                                        console.error(e3);
-                                        reject();
-                                    } else {
-                                        resolve(true);
-                                    }
-                                })
+                                resolve(true);
                             }
-                        });
+                        })
                     }
                 })
             }
@@ -786,6 +775,98 @@ const getWarehousePrice = (managerId: string) => {
     })
 };
 
+const updateMember = (memberId: number, managerId: string, name: string, phone: string) => {
+    return new Promise((resolve, reject) => {
+        console.log(memberId, managerId, name, phone);
+        const query = 'update members set name = ?, phone = ? where member_id = ? and manager_id = ?';
+        connection.query(query, [name, phone, Number(memberId), managerId], (err: MysqlError | null, res: any) => {
+            if (err) {
+                console.error(err);
+                reject();
+            } else {
+                console.log(res);
+                resolve(true);
+            }
+        })
+    });
+}
+
+const getEarning = (managerId: string, type: string, page: number, row: number) => {
+    return new Promise<ResEarning>((resolve, reject) => {
+        const start =  page*row;
+        const end = (page + 1)*row;
+        let query = `select transactionDate, transactionType, sum(price) price, sum(original_price) ogPrice
+                     from (select date_format(t.transactionDate, ?) transactionDate,
+                                  t.price,
+                                  i.original_price * t.cnt original_price,
+                                  t.transactionType
+                           from (
+                                    select *
+                                    from transactions
+                                    where owner_id = ?  and (transactionType = 'sale' or transactionType = 'warehouse')) t
+                                    join items i on t.item_id = i.id) tt
+                     group by transactionDate, transactionType
+                     order by transactionDate desc, transactionType asc`;
+
+        const query0 = `select transactionDate
+                     from (select date_format(t.transactionDate, ?) transactionDate,
+                                  t.price,
+                                  i.original_price * t.cnt original_price,
+                                  t.transactionType
+                           from (
+                                    select *
+                                    from transactions
+                                    where owner_id = ?  and (transactionType = 'sale' or transactionType = 'warehouse')) t
+                                    join items i on t.item_id = i.id) tt
+                     group by transactionDate`;
+
+        let dateFormat: string = '';
+        switch (type) {
+            case 'date':
+                dateFormat = '%Y-%m-%d';
+                break;
+            case 'month':
+                dateFormat = '%Y-%m';
+                break;
+            default:
+                dateFormat = '%Y';
+        }
+
+        connection.query(query0, [dateFormat, managerId], (e0: MysqlError|null, r0: IEarning[])=>{
+            if(e0) {
+                console.log(e0);
+                reject();
+            } else {
+                connection.query(query, [dateFormat, managerId, start, end], (err: MysqlError|null, result: IEarning[])=>{
+                    if(err) {
+                        console.error(err);
+                        reject();
+                    } else {
+                        let items:IEarningCalc[] = [];
+                        result.forEach((earning, idx)=>{
+                            // 입고
+                            if(idx !==0 && result[idx-1].transactionDate === earning.transactionDate ) {
+                                items[items.length - 1].warehouse = earning.ogPrice;
+                            } else {
+                                // 매출
+                                items.push({
+                                    ...earning,
+                                    warehouse: 0
+                                });
+                            }
+                        });
+                        items = items.slice(start, end);
+                        resolve({
+                            items,
+                            cnt: r0.length,
+                        });
+                    }
+                })
+            }
+        })
+    })
+
+}
 
 export {
     addStore,
@@ -810,5 +891,6 @@ export {
     checkIdDuplicate,
     cancelTransaction, verifyPin,
     deleteMember, login, topLogin, saleItem,
+    updateMember, getEarning
 }
 

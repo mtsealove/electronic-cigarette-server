@@ -37,6 +37,12 @@ declare interface ReqMembers {
     isPresent?: boolean;
 }
 
+declare interface ReqEarning {
+    type: string;
+    page: number;
+    row: number;
+}
+
 declare type ItemType = 'liquid' | 'device' | 'coil' | 'pod' | 'etc';
 
 declare type SortType = 'asc' | 'desc';
@@ -182,4 +188,19 @@ declare interface IRecent {
 declare interface IWarehousePrice {
     daily: number;
     monthly: number;
+}
+
+declare interface IEarning {
+    transactionDate: string;
+    price: number;
+    ogPrice: number;
+}
+
+declare interface IEarningCalc extends IEarning{
+    warehouse: number;
+}
+
+declare interface ResEarning {
+    items: IEarningCalc[];
+    cnt: number;
 }

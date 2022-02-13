@@ -44,7 +44,7 @@ const sendMessage = (message: string, phones: string[]) => {
             body: {
                 type: "SMS",
                 countryCode: "82",
-                from: '01063461686',
+                from: '01022096383',
                 content: message,
                 messages
             },
