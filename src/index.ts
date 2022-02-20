@@ -7,8 +7,8 @@ import * as sql from './sql';
 const app = express();
 const cors = require('cors');
 
-const corsDomain = process.env.NODE_ENV !== 'production' ? 'http://localhost:3000' : 'http://52.79.100.182';
-// const corsDomain = 'http://52.79.100.182';
+// const corsDomain = process.env.NODE_ENV !== 'production' ? 'http://localhost:3000' : 'http://52.79.100.182';
+const corsDomain = 'http://52.79.100.182';
 
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
