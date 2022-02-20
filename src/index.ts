@@ -7,8 +7,8 @@ import * as sql from './sql';
 const app = express();
 const cors = require('cors');
 
-// const corsDomain = process.env.NODE_ENV !== 'production' ? 'http://localhost:3000' : 'http://52.79.100.182';
-const corsDomain = 'http://52.79.100.182';
+const corsDomain = process.env.NODE_ENV !== 'production' ? 'http://localhost:3000' : 'http://52.79.100.182';
+// const corsDomain = 'http://52.79.100.182';
 
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
@@ -89,6 +89,28 @@ app.get('/top/stores', authJWT, (req: express.Request<IRequest>, res: express.Re
         res.status(400).json({});
     })
 });
+
+app.post('/update/manager/password',authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
+    const {managerId, pw} = req.body;
+    sql.updateManagerPw( pw, managerId)
+        .then(()=> {
+            res.status(200).json(true);
+        })
+        .catch(()=>{
+            res.status(500).json(false);
+        })
+})
+
+app.post('/update/manager/phone',authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
+    const {managerId, phone} = req.body;
+    sql.updatePhone( managerId, phone)
+        .then(()=> {
+            res.status(200).json(true);
+        })
+        .catch(()=>{
+            res.status(500).json(false);
+        })
+})
 
 // 관리자 로그인
 app.post('/login', async (req: express.Request, res: express.Response) => {
@@ -265,6 +287,37 @@ app.get('/members/:memberId', authJWT, async (req: express.Request<IMemberReques
     } else {
         res.status(400).json(false);
     }
+});
+
+// 회원 메모
+app.get('/members/:memberId/memo', authJWT, async (req: express.Request<IMemberRequest>, res: express.Response)=>{
+    const {user_id, memberId} = req.params;
+    if(user_id) {
+        sql.getMemberMemo(memberId)
+            .then((memo)=>{
+                res.status(200).json(memo);
+            }).catch(()=>{
+                res.status(500).json(null);
+        })
+    } else {
+        res.status(401).json(false);
+    }
+})
+
+app.post('/members/memo', authJWT, async (req: express.Request<IRequest>, res: express.Response)=>{
+    const {user_id} = req.params;
+    const {memberId, memo} = req.body;
+    if(user_id) {
+        sql.updateMemberMemo(memberId, memo)
+            .then(()=>{
+                res.status(200).json(true);
+            })
+            .catch(()=>{
+                res.status(500).json(false);
+            })
+    } else {
+        res.status(401).json(null);
+    }
 })
 
 // 상품 등록
@@ -407,15 +460,20 @@ app.post('/transactions/refund', authJWT, (req: express.Request<IRequest>, res: 
 app.post('/send/message', authJWT, async (req: express.Request<IRequest>, res: express.Response) => {
     const {members, message} = req.body;
     if (req.params.user_id) {
-        // 회원 ID 목록의 데이터가 존재하지 않으면 전체 발송
-        if (members.length === 0) {
-            const fetch = await sql.getAllPhoneNumbers(req.params.user_id);
-            naver.sendMessage(message, fetch);
-            res.status(200).json(true);
-        } else {  //  특정 회원 ID 선택 발송
-            const fetch = await sql.getPhoneNumbers(members);
-            naver.sendMessage(message, fetch);
-            res.status(200).json(true);
+        const phone = await sql.getMyPhone(req.params.user_id);
+        if(phone) {
+            // 회원 ID 목록의 데이터가 존재하지 않으면 전체 발송
+            if (members.length === 0) {
+                const fetch = await sql.getAllPhoneNumbers(req.params.user_id);
+                naver.sendMessage(message, fetch, phone);
+                res.status(200).json(true);
+            } else {  //  특정 회원 ID 선택 발송
+                const fetch = await sql.getPhoneNumbers(members);
+                naver.sendMessage(message, fetch, phone);
+                res.status(200).json(true);
+            }
+        } else {
+            res.status(502).json(false);
         }
     } else {
         res.status(400).json(false);

@@ -1,6 +1,7 @@
 import {MysqlError,} from "mysql";
 import * as crypto from 'crypto';
 import {query} from "express";
+import {rejects} from "assert";
 
 const cryptoSecret = process.env.DB_SECRET;
 
@@ -95,7 +96,7 @@ const addStore = (id: string, pw: string, seq: number, name: string, addr: strin
 // 매장 목록
 const getStores = (seq: number) => {
     return new Promise<IStore[]>(((resolve, reject) => {
-        connection.query('select user_id, name, addr, date_format(registerDate, \'%Y-%m-%d\') as registerDate from managers where top_seq=?',
+        connection.query('select user_id, name, addr, phone, date_format(registerDate, \'%Y-%m-%d\') as registerDate from managers where top_seq=?',
             [seq], (err: MysqlError | null, results: IStore[]) => {
                 if (err) {
                     reject();
@@ -508,6 +509,39 @@ const getMember = (memberId: number) => {
     });
 }
 
+const getMemberMemo = (memberId: number) => {
+    return new Promise<string>((resolve, reject) => {
+        const query = 'select memo from members where member_id = ?';
+        connection.query(query, [memberId], (err: MysqlError | null, result: any[]) => {
+            if (err) {
+                console.error(err);
+                reject();
+            } else {
+                if (result.length === 0) {
+                    reject();
+                } else {
+                    const {memo} = result[0];
+                    resolve(memo);
+                }
+            }
+        })
+    })
+};
+
+const updateMemberMemo = (memberId: number, memo: string) => {
+    return new Promise<boolean>((resolve, reject) => {
+        const query = 'update members set memo = ? where member_id = ?';
+        connection.query(query, [memo, memberId], (err: MysqlError|null)=>{
+            if(err) {
+                console.error(err);
+                reject();
+            } else {
+                resolve(true);
+            }
+        });
+    })
+}
+
 const getItem = (itemId: number) => {
     return new Promise<ISingleItem>((resolve, reject) => {
         const query = 'select * from items where id = ?';
@@ -793,32 +827,34 @@ const updateMember = (memberId: number, managerId: string, name: string, phone: 
 
 const getEarning = (managerId: string, type: string, page: number, row: number) => {
     return new Promise<ResEarning>((resolve, reject) => {
-        const start =  page*row;
-        const end = (page + 1)*row;
+        const start = page * row;
+        const end = (page + 1) * row;
         let query = `select transactionDate, transactionType, sum(price) price, sum(original_price) ogPrice
                      from (select date_format(t.transactionDate, ?) transactionDate,
                                   t.price,
-                                  i.original_price * t.cnt original_price,
+                                  i.original_price * t.cnt          original_price,
                                   t.transactionType
                            from (
                                     select *
                                     from transactions
-                                    where owner_id = ?  and (transactionType = 'sale' or transactionType = 'warehouse')) t
+                                    where owner_id = ?
+                                      and (transactionType = 'sale' or transactionType = 'warehouse')) t
                                     join items i on t.item_id = i.id) tt
                      group by transactionDate, transactionType
                      order by transactionDate desc, transactionType asc`;
 
         const query0 = `select transactionDate
-                     from (select date_format(t.transactionDate, ?) transactionDate,
-                                  t.price,
-                                  i.original_price * t.cnt original_price,
-                                  t.transactionType
-                           from (
-                                    select *
-                                    from transactions
-                                    where owner_id = ?  and (transactionType = 'sale' or transactionType = 'warehouse')) t
-                                    join items i on t.item_id = i.id) tt
-                     group by transactionDate`;
+                        from (select date_format(t.transactionDate, ?) transactionDate,
+                                     t.price,
+                                     i.original_price * t.cnt          original_price,
+                                     t.transactionType
+                              from (
+                                       select *
+                                       from transactions
+                                       where owner_id = ?
+                                         and (transactionType = 'sale' or transactionType = 'warehouse')) t
+                                       join items i on t.item_id = i.id) tt
+                        group by transactionDate`;
 
         let dateFormat: string = '';
         switch (type) {
@@ -832,20 +868,20 @@ const getEarning = (managerId: string, type: string, page: number, row: number) 
                 dateFormat = '%Y';
         }
 
-        connection.query(query0, [dateFormat, managerId], (e0: MysqlError|null, r0: IEarning[])=>{
-            if(e0) {
+        connection.query(query0, [dateFormat, managerId], (e0: MysqlError | null, r0: IEarning[]) => {
+            if (e0) {
                 console.log(e0);
                 reject();
             } else {
-                connection.query(query, [dateFormat, managerId, start, end], (err: MysqlError|null, result: IEarning[])=>{
-                    if(err) {
+                connection.query(query, [dateFormat, managerId, start, end], (err: MysqlError | null, result: IEarning[]) => {
+                    if (err) {
                         console.error(err);
                         reject();
                     } else {
-                        let items:IEarningCalc[] = [];
-                        result.forEach((earning, idx)=>{
+                        let items: IEarningCalc[] = [];
+                        result.forEach((earning, idx) => {
                             // 입고
-                            if(idx !==0 && result[idx-1].transactionDate === earning.transactionDate ) {
+                            if (idx !== 0 && result[idx - 1].transactionDate === earning.transactionDate) {
                                 items[items.length - 1].warehouse = earning.ogPrice;
                             } else {
                                 // 매출
@@ -865,7 +901,53 @@ const getEarning = (managerId: string, type: string, page: number, row: number) 
             }
         })
     })
+}
 
+const updateManagerPw = (pw: string, managerId: string) => {
+    return new Promise((resolve, reject)=>{
+        const hashed = crypto.createHmac('sha256', cryptoSecret).update(pw).digest('hex');
+        const query = 'update managers set password = ? where user_id = ?';
+        connection.query(query, [hashed, managerId], (err: MysqlError|null)=>{
+            if(err) {
+                console.error(err);
+                reject();
+            } else {
+                resolve(true);
+            }
+        })
+    })
+}
+
+const updatePhone = (managerId: string, phone: string) =>{
+    return new Promise((resolve, reject)=>{
+        const query='update managers set phone = ? where user_id = ?';
+        connection.query(query, [phone, managerId], (err:MysqlError|null)=>{
+            if(err) {
+                console.error(err);
+                reject();
+            } else {
+                resolve(true);
+            }
+        })
+    })
+};
+
+const getMyPhone = (managerId: string) => {
+    return new Promise<string>((resolve, reject)=>{
+        const query='select phone from managers where user_id = ?';
+        connection.query(query, [managerId], (err: MysqlError|null, results:any[])=>{
+            if(err) {
+                console.error(err);
+                reject();
+            } else {
+                if(results.length!==0) {
+                    resolve(results[0].phone);
+                } else {
+                    reject();
+                }
+            }
+        })
+    });
 }
 
 export {
@@ -891,6 +973,8 @@ export {
     checkIdDuplicate,
     cancelTransaction, verifyPin,
     deleteMember, login, topLogin, saleItem,
-    updateMember, getEarning
+    updateMember, getEarning,
+    getMemberMemo, updateMemberMemo, updateManagerPw,
+    updatePhone, getMyPhone
 }
 

@@ -81,6 +81,7 @@ declare interface IStore {
     name: string;
     addr: string;
     registerDate: string;
+    phone?: string;
 }
 
 declare interface ResMembers {

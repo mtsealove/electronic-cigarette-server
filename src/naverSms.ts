@@ -2,7 +2,7 @@ import CryptoJS from 'crypto-js';
 const request = require('request');
 
 // 네이버 sms 발송 api
-const sendMessage = (message: string, phones: string[]) => {
+const sendMessage = (message: string, phones: string[], userPhone: string) => {
 
 
     let resultCode = 404;
@@ -44,7 +44,7 @@ const sendMessage = (message: string, phones: string[]) => {
             body: {
                 type: "SMS",
                 countryCode: "82",
-                from: '01022096383',
+                from: userPhone,
                 content: message,
                 messages
             },
