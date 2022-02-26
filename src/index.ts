@@ -337,10 +337,10 @@ app.post('/items', authJWT, (req: express.Request<IRequest>, res: express.Respon
 });
 
 app.post('/item/update', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
-    const {itemId, price, originalPrice, name, stock} = req.body;
+    const {itemId, price, originalPrice, name, stock, itemType} = req.body;
     const {user_id} = req.params;
     if (user_id) {
-        sql.updateItem(user_id, itemId, price, originalPrice, name, stock)
+        sql.updateItem(user_id, itemId, price, originalPrice, name, stock, itemType)
             .then(() => {
                 res.status(200).json(true);
             })
@@ -402,13 +402,13 @@ app.get('/items', authJWT, (req: express.Request<IRequest, {}, {}, ReqItems>, re
 // 상품 입고
 app.post('/items/warehouse', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     if (req.params.user_id) {
-        const {id, cnt} = req.body;
-        sql.warehouseItem(req.params.user_id, id, cnt)
+        const {id, cnt, date} = req.body;
+        sql.warehouseItem(req.params.user_id, id, cnt, date)
             .then(() => {
                 res.status(200).json(true);
             }).catch(() => {
             res.status(400).json(false);
-        })
+        });
     } else {
         res.status(400).json(false);
     }

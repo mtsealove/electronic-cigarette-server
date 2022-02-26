@@ -283,10 +283,10 @@ const getItems = (managerId: string, page: number, rows: number, sort: SortBy, s
     }))
 );
 
-const updateItem = (managerId: string, itemId: number, price: number, ogPrice: number, name: string, stock: number) => {
+const updateItem = (managerId: string, itemId: number, price: number, ogPrice: number, name: string, stock: number, type: string) => {
     return new Promise<boolean>((resolve, reject) => {
-        const query = 'update items set price = ?, original_price = ?, name =? , stock = ? where id = ? and owner_id =?';
-        connection.query(query, [price, ogPrice, name, stock, itemId, managerId], (err: MysqlError | null) => {
+        const query = 'update items set price = ?, original_price = ?, name =? , stock = ?, type = ? where id = ? and owner_id =?';
+        connection.query(query, [price, ogPrice, name, stock, type, itemId, managerId], (err: MysqlError | null) => {
             if (err) {
                 console.error(err);
                 reject();
@@ -298,7 +298,7 @@ const updateItem = (managerId: string, itemId: number, price: number, ogPrice: n
 }
 
 
-const warehouseItem = (managerId: string, id: number, cnt: number) => {
+const warehouseItem = (managerId: string, id: number, cnt: number, date: string) => {
     return new Promise(((resolve, reject) => {
         connection.query('update items set stock = stock + ? where id = ?', [cnt, id],
             (err: MysqlError | null) => {
@@ -306,8 +306,8 @@ const warehouseItem = (managerId: string, id: number, cnt: number) => {
                     console.error(err);
                     reject();
                 } else {
-                    connection.query('insert into transactions(owner_id, item_id, transactionType, cnt) values (?, ?, ?, ?)',
-                        [managerId, id, 'warehouse', cnt],
+                    connection.query('insert into transactions(owner_id, item_id, transactionType, cnt, transactionDate) values (?, ?, ?, ?, ?)',
+                        [managerId, id, 'warehouse', cnt, date],
                         (e2: MysqlError | null) => {
                             if (e2) {
                                 reject();
