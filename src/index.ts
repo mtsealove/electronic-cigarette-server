@@ -8,6 +8,7 @@ const app = express();
 const cors = require('cors');
 
 // const corsDomain = process.env.NODE_ENV !== 'production' ? 'http://localhost:3000' : 'http://52.79.100.182';
+// const corsDomain = 'http://localhost:3000';
 const corsDomain = 'http://52.79.100.182';
 
 app.use(express.json());
@@ -241,8 +242,9 @@ app.post('/members/delete', authJWT, (req: express.Request<IRequest>, res: expre
 // 회원 수정
 app.post('/members/update', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
-    const {memberId, name, phone} = req.body;
-    sql.updateMember(memberId, user_id!, name,phone)
+    const {memberId, name, phone, date} = req.body;
+    console.log(date);
+    sql.updateMember(memberId, user_id!, name,phone, date)
         .then(() => {
             res.status(200).json(true);
         }).catch(() => {
@@ -388,6 +390,7 @@ app.get('/rank/items', authJWT, async (req: express.Request<IRequest, {}, {}, Re
 // @ts-ignore
 app.get('/items', authJWT, (req: express.Request<IRequest, {}, {}, ReqItems>, res: express.Response) => {
     const {page, rows, query, itemType, sort, sortType} = req.query;
+    console.log('query:', query);
     if (req.params.user_id) {
         sql.getItems(req.params.user_id, page, rows, sort, sortType, query, itemType).then((result) => {
             res.status(200).json(result);

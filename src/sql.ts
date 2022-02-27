@@ -242,7 +242,7 @@ const getItems = (managerId: string, page: number, rows: number, sort: SortBy, s
                    from items
                    where owner_id = '${managerId}' and !deprecated `;
         if (query) {
-            sql += ` and name like '%${query}%'`;
+            sql += ` and replace(name, ' ','') like '%${query}%'`;
         }
         if (itemType) {
             sql += ` and type = '${itemType}'`;
@@ -809,11 +809,11 @@ const getWarehousePrice = (managerId: string) => {
     })
 };
 
-const updateMember = (memberId: number, managerId: string, name: string, phone: string) => {
+const updateMember = (memberId: number, managerId: string, name: string, phone: string, date: string) => {
     return new Promise((resolve, reject) => {
         console.log(memberId, managerId, name, phone);
-        const query = 'update members set name = ?, phone = ? where member_id = ? and manager_id = ?';
-        connection.query(query, [name, phone, Number(memberId), managerId], (err: MysqlError | null, res: any) => {
+        const query = 'update members set name = ?, phone = ?, register_date = ? where member_id = ? and manager_id = ?';
+        connection.query(query, [name, phone, date, Number(memberId), managerId], (err: MysqlError | null, res: any) => {
             if (err) {
                 console.error(err);
                 reject();
