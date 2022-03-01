@@ -354,6 +354,22 @@ app.post('/item/update', authJWT, (req: express.Request<IRequest>, res: express.
     }
 })
 
+app.post('/item/delete', authJWT, (req: express.Request<IRequest>, res: express.Response)=>{
+    const {itemId} = req.body;
+    const {user_id} = req.params;
+    console.log('delete: ',itemId);
+    if(user_id) {
+        sql.deleteItem(Number(itemId))
+            .then(()=>{
+                res.status(200).json(true);
+            }).catch(()=>{
+                res.status(500).json(false);
+        })
+    } else {
+        res.status(401).json(false);
+    }
+})
+
 // 특정 상품 조회
 app.get('/items/:itemId', authJWT, (req: express.Request<IItemRequest>, res: express.Response) => {
     const {user_id, itemId} = req.params;

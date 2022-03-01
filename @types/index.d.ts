@@ -158,6 +158,10 @@ declare interface ISingleMember {
     member_id: number;
 }
 
+declare interface ISingleMember2 extends ISingleMember{
+    total: number;
+}
+
 declare interface SmsMessage {
     to: string;
 }

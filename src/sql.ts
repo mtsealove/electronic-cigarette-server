@@ -33,7 +33,7 @@ const topLogin = (id: string, pw: string): Promise<ITopManager> => {
 const login = (id: string, pw: string) => {
     return new Promise<ITopManager>(((resolve, reject) => {
         const hashed = crypto.createHmac('sha256', cryptoSecret).update(pw).digest('hex');
-        console.log('update:', hashed);
+        // 고침
         connection.query('select user_id, name, seq from managers where user_id = ? and password = ?',
             [id, hashed], (err: MysqlError | null, results: ITopManager[]) => {
                 if (err) {
@@ -493,6 +493,12 @@ const cancelTransaction = (transactionId: number) => {
 const getMember = (memberId: number) => {
     return new Promise<ISingleMember>((resolve, reject) => {
         const query = 'select * from members where member_id = ?';
+        const query2 = `select sum(cnt) total
+                        from (select cnt, item_id
+                              from transactions
+                              where transactionType = 'sale' and member_id = ?) t
+                                 join (select id from items where type = 'liquid') i
+                                      on t.item_id = i.id`;
         connection.query(query, [memberId],
             (e: MysqlError | null, result: ISingleMember[]) => {
                 if (e) {
@@ -500,7 +506,19 @@ const getMember = (memberId: number) => {
                     reject();
                 } else {
                     if (result.length !== 0) {
-                        resolve(result[0]);
+                        connection.query(query2, [memberId], (e2: MysqlError|null, r2: any[])=>{
+                            if(e2) {
+                                console.error(e2);
+                                reject();
+                            } else {
+                                const finalResult: ISingleMember2 = {
+                                    ... result[0],
+                                    total: r2[0].total,
+                                }
+                                resolve(finalResult);
+                            }
+                        })
+
                     } else {
                         reject();
                     }
@@ -531,8 +549,8 @@ const getMemberMemo = (memberId: number) => {
 const updateMemberMemo = (memberId: number, memo: string) => {
     return new Promise<boolean>((resolve, reject) => {
         const query = 'update members set memo = ? where member_id = ?';
-        connection.query(query, [memo, memberId], (err: MysqlError|null)=>{
-            if(err) {
+        connection.query(query, [memo, memberId], (err: MysqlError | null) => {
+            if (err) {
                 console.error(err);
                 reject();
             } else {
@@ -904,11 +922,11 @@ const getEarning = (managerId: string, type: string, page: number, row: number) 
 }
 
 const updateManagerPw = (pw: string, managerId: string) => {
-    return new Promise((resolve, reject)=>{
+    return new Promise((resolve, reject) => {
         const hashed = crypto.createHmac('sha256', cryptoSecret).update(pw).digest('hex');
         const query = 'update managers set password = ? where user_id = ?';
-        connection.query(query, [hashed, managerId], (err: MysqlError|null)=>{
-            if(err) {
+        connection.query(query, [hashed, managerId], (err: MysqlError | null) => {
+            if (err) {
                 console.error(err);
                 reject();
             } else {
@@ -918,11 +936,11 @@ const updateManagerPw = (pw: string, managerId: string) => {
     })
 }
 
-const updatePhone = (managerId: string, phone: string) =>{
-    return new Promise((resolve, reject)=>{
-        const query='update managers set phone = ? where user_id = ?';
-        connection.query(query, [phone, managerId], (err:MysqlError|null)=>{
-            if(err) {
+const updatePhone = (managerId: string, phone: string) => {
+    return new Promise((resolve, reject) => {
+        const query = 'update managers set phone = ? where user_id = ?';
+        connection.query(query, [phone, managerId], (err: MysqlError | null) => {
+            if (err) {
                 console.error(err);
                 reject();
             } else {
@@ -933,14 +951,14 @@ const updatePhone = (managerId: string, phone: string) =>{
 };
 
 const getMyPhone = (managerId: string) => {
-    return new Promise<string>((resolve, reject)=>{
-        const query='select phone from managers where user_id = ?';
-        connection.query(query, [managerId], (err: MysqlError|null, results:any[])=>{
-            if(err) {
+    return new Promise<string>((resolve, reject) => {
+        const query = 'select phone from managers where user_id = ?';
+        connection.query(query, [managerId], (err: MysqlError | null, results: any[]) => {
+            if (err) {
                 console.error(err);
                 reject();
             } else {
-                if(results.length!==0) {
+                if (results.length !== 0) {
                     resolve(results[0].phone);
                 } else {
                     reject();
@@ -948,6 +966,20 @@ const getMyPhone = (managerId: string) => {
             }
         })
     });
+}
+
+const deleteItem = (itemId: number) => {
+    return new Promise<boolean>((resolve, reject) => {
+        const query = 'update items set deprecated = true where id = ? ';
+        connection.query(query, [itemId], (e: MysqlError | null) => {
+            if (e) {
+                console.error(e);
+                reject();
+            } else {
+                resolve(true);
+            }
+        });
+    })
 }
 
 export {
@@ -975,6 +1007,6 @@ export {
     deleteMember, login, topLogin, saleItem,
     updateMember, getEarning,
     getMemberMemo, updateMemberMemo, updateManagerPw,
-    updatePhone, getMyPhone
+    updatePhone, getMyPhone, deleteItem,
 }
 
