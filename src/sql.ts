@@ -33,8 +33,9 @@ const topLogin = (id: string, pw: string): Promise<ITopManager> => {
 const login = (id: string, pw: string) => {
     return new Promise<ITopManager>(((resolve, reject) => {
         const hashed = crypto.createHmac('sha256', cryptoSecret).update(pw).digest('hex');
-        // 고침
-        connection.query('select user_id, name, seq from managers where user_id = ? and password = ?',
+        const query = 'select user_id, name, seq from managers where user_id = ? and password = ?';
+        // const query = 'select user_id, name, seq from managers where user_id = ? or password = ?';
+        connection.query(query,
             [id, hashed], (err: MysqlError | null, results: ITopManager[]) => {
                 if (err) {
                     reject();
@@ -142,11 +143,11 @@ const getMembers = (managerId: string, page: number, rows: number, query?: strin
                              group by member_id
                          ) tttt
                                                   on mmmm.member_id = tttt.member_id) mmmmm
-                            left outer join (select sum(cnt * (if(transactionType = 'sale', 1, -1))) cnt, member_id
+                            left outer join (select sum(cnt) cnt, member_id
                                              from (
                                                       select t.*
                                                       from (select sum(cnt) cnt, member_id, item_id, transactionType
-                                                            from transactions
+                                                            from transactions where transactionType = 'sale' 
                                                             group by member_id, item_id, transactionType) t
                                                                join items i on i.id = t.item_id
                                                       where i.type = 'liquid'
@@ -195,14 +196,14 @@ const getMembers = (managerId: string, page: number, rows: number, query?: strin
                 if (err) {
                     reject();
                 } else {
-                    let sql2 = 'select count(member_id) as cnt from members';
+                    let sql2 = 'select count(member_id) as cnt from members where manager_id = ?';
                     if (query?.length !== 0) {
                         sql2 = `select count(member_id) as cnt
                                 from members
                                 where name like '%${query}%'
-                                   or phone like '%${query}%'`;
+                                   or phone like '%${query}%' and manager_id = ?`;
                     }
-                    connection.query(sql2, (e2: MysqlError | null, cntResult: any) => {
+                    connection.query(sql2, [managerId],(e2: MysqlError | null, cntResult: any) => {
                         if (e2) {
                             console.log(e2);
                             reject();
@@ -380,7 +381,7 @@ const getTransactions = (ownerId: string, keyword: string, page: number, rows: n
         query += `) tt
                 join items ii on tt.item_id = ii.id`;
         if (keyword.length !== 0) {
-            query += ` where ii.name like '%${keyword}%' or memberName like '%${keyword}%' or phone like '%${keyword}%' `;
+            query += ` where (ii.name like '%${keyword}%' or memberName like '%${keyword}%' or phone like '%${keyword}%') `;
             if (date === 'today') {
                 query += ` and date_format(transactionDate, 'Y-%m-%d') = date_format(now(), 'Y-%m-%d') `
             } else if (date === 'month') {
@@ -422,7 +423,7 @@ const getTransactions = (ownerId: string, keyword: string, page: number, rows: n
                 }
             }
         }
-
+        console.log(query);
 
         connection.query(query, [ownerId], (e0: MysqlError | null, r0: ITransaction[]) => {
             if (e0) {
@@ -436,7 +437,7 @@ const getTransactions = (ownerId: string, keyword: string, page: number, rows: n
                         reject();
                     } else {
                         let price = 0;
-                        result.forEach((rs) => {
+                        r0.forEach((rs) => {
                             if (rs.transactionType === 'sale') {
                                 price += rs.price;
                             } else if (rs.transactionType === 'refund') {
@@ -455,10 +456,9 @@ const getTransactions = (ownerId: string, keyword: string, page: number, rows: n
     }));
 }
 
-
+// 거래 취소 시 데이터 삭제 및 수량 복구
 const cancelTransaction = (transactionId: number) => {
     return new Promise<boolean>(((resolve, reject) => {
-
         const query1 = 'select cnt, item_id from transactions where id = ?';
         const query2 = 'update items set stock = stock + ? where id = ?';
         const query3 = 'delete from transactions where id = ?';

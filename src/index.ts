@@ -116,7 +116,6 @@ app.post('/update/manager/phone',authJWT, (req: express.Request<IRequest>, res: 
 // 관리자 로그인
 app.post('/login', async (req: express.Request, res: express.Response) => {
     const {id, pw} = req.body;
-    console.log(req.body);
     try {
         const result: ITopManager = await sql.login(id, pw);
         // 로그인 성공
