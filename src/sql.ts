@@ -341,8 +341,8 @@ const saleItem = (managerId: string, memberId: number, itemId: number, cnt: numb
                             } else {
                                 // 증정이면 회원 업데이트
                                 if (isPresent) {
-                                    const sql3 = 'update members set present = present +1 where member_id = ?';
-                                    connection.query(sql3, [memberId], (e3: MysqlError | null) => {
+                                    const sql3 = 'update members set present = present + ? where member_id = ?';
+                                    connection.query(sql3, [cnt, memberId], (e3: MysqlError | null) => {
                                         if (e3) {
                                             console.error(e3);
                                             reject()
@@ -459,7 +459,7 @@ const getTransactions = (ownerId: string, keyword: string, page: number, rows: n
 // 거래 취소 시 데이터 삭제 및 수량 복구
 const cancelTransaction = (transactionId: number) => {
     return new Promise<boolean>(((resolve, reject) => {
-        const query1 = 'select cnt, item_id from transactions where id = ?';
+        const query1 = 'select cnt, item_id, transactionType, member_id from transactions where id = ?';
         const query2 = 'update items set stock = stock + ? where id = ?';
         const query3 = 'delete from transactions where id = ?';
 
@@ -468,7 +468,7 @@ const cancelTransaction = (transactionId: number) => {
                 console.error(e1);
                 reject();
             } else {
-                const {item_id, cnt} = r1[0];
+                const {item_id, cnt, transactionType, member_id } = r1[0];
                 connection.query(query2, [cnt, item_id], (e2: MysqlError | null) => {
                     if (e2) {
                         console.error(e2);
@@ -479,7 +479,20 @@ const cancelTransaction = (transactionId: number) => {
                                 console.error(e3);
                                 reject();
                             } else {
-                                resolve(true);
+                                // 증정인 경우 증정 내역 복구
+                                if(transactionType === 'present') {
+                                    const query4 = 'update members set present = present - ? where member_id = ?';
+                                    connection.query(query4, [cnt, member_id], (e4: MysqlError|null)=>{
+                                        if(e4) {
+                                            console.error(e4);
+                                            reject();
+                                        } else {
+                                            resolve(true);
+                                        }
+                                    })
+                                } else  {
+                                    resolve(true);
+                                }
                             }
                         })
                     }
