@@ -147,7 +147,9 @@ const getMembers = (managerId: string, page: number, rows: number, query?: strin
                                              from (
                                                       select t.*
                                                       from (select sum(cnt) cnt, member_id, item_id, transactionType
-                                                            from transactions where transactionType = 'sale' 
+                                                            from transactions 
+                                                            where transactionType = 'sale'
+                                                            and transactionDate > date_add(now(), interval -1 year)
                                                             group by member_id, item_id, transactionType) t
                                                                join items i on i.id = t.item_id
                                                       where i.type = 'liquid'
@@ -158,15 +160,14 @@ const getMembers = (managerId: string, page: number, rows: number, query?: strin
         const values = [managerId, startIdx, Number(rows)];
         if (query) {
             sql = `select mmmmm.*, ttttt.cnt
-                   from (select mmmm.*
+                   from (select mmmm.*, tttt.recent
                          from (select member_id,
                                       name,
                                       phone,
                                       date_format(register_date, \'%Y-%m-%d\') as registerDate,
                                       present
                                from members
-                               where manager_id = ?
-                                 and (name like '%${query}%' or phone like '%${query}%')) mmmm
+                               where manager_id = ? and (name like '%${query}%' or phone like '%${query}%')) mmmm
                                   left outer join (
                              select group_concat(recent order by transactionDate desc) recent, member_id
                              from (select concat(name, '(', cnt, ')') as recent, member_id, transactionDate
@@ -176,20 +177,20 @@ const getMembers = (managerId: string, page: number, rows: number, query?: strin
                              group by member_id
                          ) tttt
                                                   on mmmm.member_id = tttt.member_id) mmmmm
-                            left outer join (
-                       select sum(cnt * (if(transactionType = 'sale', 1, -1))) cnt, member_id
-                       from (
-                                select t.*
-                                from (select sum(cnt) cnt, member_id, item_id, transactionType
-                                      from transactions
-                                      group by member_id, item_id, transactionType) t
-                                         join items i on i.id = t.item_id
-                                where i.type = 'liquid'
-                            ) tt
-                       group by member_id
-                   ) ttttt
+                            left outer join (select sum(cnt) cnt, member_id
+                                             from (
+                                                      select t.*
+                                                      from (select sum(cnt) cnt, member_id, item_id, transactionType
+                                                            from transactions 
+                                                            where transactionType = 'sale'
+                                                            and transactionDate > date_add(now(), interval -1 year)
+                                                            group by member_id, item_id, transactionType) t
+                                                               join items i on i.id = t.item_id
+                                                      where i.type = 'liquid'
+                                                  ) tt
+                                             group by member_id) ttttt
                                             on mmmmm.member_id = ttttt.member_id
-                   order by member_id desc limit ?, ?`;
+                   order by registerDate desc limit ?, ?`;
         }
         connection.query(sql, values,
             (err: MysqlError | null, results: IMember[]) => {
@@ -509,7 +510,9 @@ const getMember = (memberId: number) => {
         const query2 = `select sum(cnt) total
                         from (select cnt, item_id
                               from transactions
-                              where transactionType = 'sale' and member_id = ?) t
+                              where transactionType = 'sale'
+                                and transactionDate > date_add(now(), interval - 1 year)
+                                and member_id = ?) t
                                  join (select id from items where type = 'liquid') i
                                       on t.item_id = i.id`;
         connection.query(query, [memberId],
