@@ -222,10 +222,10 @@ const getMembers = (managerId: string, page: number, rows: number, query?: strin
     }))
 );
 
-const postItem = (managerId: string, name: string, price: string, type: string, original_price: number) => (
+const postItem = (managerId: string, name: string, price: string, type: string, original_price: number, cash_price: number) => (
     new Promise<boolean>(((resolve, reject) => {
-        connection.query('insert into items(owner_id, name, price, type, original_price) values(?, ?, ?, ?, ?)'
-            , [managerId, name, price, type, original_price],
+        connection.query('insert into items(owner_id, name, price, type, original_price, cash_price) values(?, ?, ?, ?, ?, ?)'
+            , [managerId, name, price, type, original_price, cash_price],
             (err: MysqlError | null) => {
                 if (err) {
                     console.log(err);
@@ -240,7 +240,7 @@ const postItem = (managerId: string, name: string, price: string, type: string, 
 const getItems = (managerId: string, page: number, rows: number, sort: SortBy, sortType: SortType, query?: string, itemType?: ItemType) => (
     new Promise<ResItems>(((resolve, reject) => {
         const startIdx = page * rows
-        let sql = `select id, name, price, type, stock, original_price
+        let sql = `select id, name, price, type, stock, original_price, cash_price
                    from items
                    where owner_id = '${managerId}' and !deprecated `;
         if (query) {
@@ -285,10 +285,10 @@ const getItems = (managerId: string, page: number, rows: number, sort: SortBy, s
     }))
 );
 
-const updateItem = (managerId: string, itemId: number, price: number, ogPrice: number, name: string, stock: number, type: string) => {
+const updateItem = (managerId: string, itemId: number, price: number, ogPrice: number, name: string, stock: number, type: string, cashPrice: number) => {
     return new Promise<boolean>((resolve, reject) => {
-        const query = 'update items set price = ?, original_price = ?, name =? , stock = ?, type = ? where id = ? and owner_id =?';
-        connection.query(query, [price, ogPrice, name, stock, type, itemId, managerId], (err: MysqlError | null) => {
+        const query = 'update items set price = ?, original_price = ?, name =? , stock = ?, type = ?, cash_price = ? where id = ? and owner_id =?';
+        connection.query(query, [price, ogPrice, name, stock, type, cashPrice, itemId, managerId], (err: MysqlError | null) => {
             if (err) {
                 console.error(err);
                 reject();
@@ -998,6 +998,68 @@ const deleteItem = (itemId: number) => {
     })
 }
 
+// 사용자별 총액
+const getUserTotal = (memberId: number, date: string) =>{
+    return new Promise<ITotal[]>((resolve, reject) => {
+        let dateFormat = '%Y';
+        switch (date) {
+            case 'daily':
+                dateFormat = '%Y-%m-%d';
+                break;
+            case 'monthly':
+                dateFormat = '%Y-%m';
+                break;
+            case 'all':
+                dateFormat = '';
+                break;
+        }
+
+        const query = `select sum(price) price, date_format(transactionDate, '${dateFormat}') date
+                     from transactions
+                     where member_id = ?
+                     group by date
+                     order by date desc`;
+        connection.query(query, [memberId], (err: MysqlError|null, result: ITotal[])=>{
+            if(err) {
+                console.error(err);
+                reject();
+            } else {
+                resolve(result);
+            }
+        })
+    });
+}
+
+const getItemTotal = (itemId: number, date: string) =>{
+    return new Promise<ITotal[]>((resolve, reject) => {
+        let dateFormat = '%Y';
+        switch (date) {
+            case 'daily':
+                dateFormat = '%Y-%m-%d';
+                break;
+            case 'monthly':
+                dateFormat = '%Y-%m';
+                break;
+            case 'all':
+                dateFormat = '';
+                break;
+        }
+        const query = `select sum(price) price, date_format(transactionDate, '${dateFormat}') date
+                     from transactions
+                     where item_id = ?
+                     group by date
+                     order by date desc`;
+        connection.query(query, [itemId], (err: MysqlError|null, result: ITotal[])=>{
+            if(err) {
+                console.error(err);
+                reject();
+            } else {
+                resolve(result);
+            }
+        })
+    });
+}
+
 export {
     addStore,
     updateItem,
@@ -1024,5 +1086,6 @@ export {
     updateMember, getEarning,
     getMemberMemo, updateMemberMemo, updateManagerPw,
     updatePhone, getMyPhone, deleteItem,
+    getItemTotal, getUserTotal
 }
 

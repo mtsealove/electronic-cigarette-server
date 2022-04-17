@@ -8,8 +8,8 @@ const app = express();
 const cors = require('cors');
 
 // const corsDomain = process.env.NODE_ENV !== 'production' ? 'http://localhost:3000' : 'http://52.79.100.182';
-// const corsDomain = 'http://localhost:3000';
-const corsDomain = 'http://52.79.100.182';
+const corsDomain = 'http://localhost:3000';
+// const corsDomain = 'http://52.79.100.182';
 
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
@@ -305,6 +305,31 @@ app.get('/members/:memberId/memo', authJWT, async (req: express.Request<IMemberR
     }
 })
 
+// 사용자별 총액
+//@ts-ignore
+app.get('/total/members', authJWT, (req: express.Request<IRequest, {}, {}, ReqTotalMember>, res: express.Response)=>{
+    const {memberId, date} = req.query;
+    sql.getUserTotal(memberId, date)
+        .then((result)=>{
+            console.log(result);
+            res.status(200).json(result);
+        }).catch(()=>{
+        res.status(400);
+    })
+});
+
+// 상품별
+//@ts-ignore
+app.get('/total/items', authJWT, (req: express.Request<IRequest, {}, {}, ReqTotalItem>, res: express.Response)=>{
+    const {itemId, date} = req.query;
+    sql.getItemTotal(itemId, date)
+        .then((result)=>{
+            res.status(200).json(result);
+        }).catch(()=>{
+        res.status(400);
+    })
+});
+
 app.post('/members/memo', authJWT, async (req: express.Request<IRequest>, res: express.Response)=>{
     const {user_id} = req.params;
     const {memberId, memo} = req.body;
@@ -324,9 +349,9 @@ app.post('/members/memo', authJWT, async (req: express.Request<IRequest>, res: e
 // 상품 등록
 app.post('/items', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
-    const {name, price, type, original_price} = req.body;
+    const {name, price, type, original_price, cash_price} = req.body;
     if (user_id) {
-        sql.postItem(user_id, name, price, type, original_price)
+        sql.postItem(user_id, name, price, type, original_price, cash_price)
             .then(() => {
                 res.status(200).json(true);
             }).catch(() => {
@@ -338,10 +363,10 @@ app.post('/items', authJWT, (req: express.Request<IRequest>, res: express.Respon
 });
 
 app.post('/item/update', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
-    const {itemId, price, originalPrice, name, stock, itemType} = req.body;
+    const {itemId, price, originalPrice, name, stock, itemType, cashPrice} = req.body;
     const {user_id} = req.params;
     if (user_id) {
-        sql.updateItem(user_id, itemId, price, originalPrice, name, stock, itemType)
+        sql.updateItem(user_id, itemId, price, originalPrice, name, stock, itemType, cashPrice)
             .then(() => {
                 res.status(200).json(true);
             })
@@ -512,6 +537,7 @@ app.get('/recent', authJWT, (req: express.Request<IRequest>, res: express.Respon
         res.status(401).json(false);
     }
 });
+
 
 
 app.listen(4000, () => {

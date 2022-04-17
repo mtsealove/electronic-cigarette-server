@@ -111,6 +111,7 @@ declare interface IItem {
     type: ItemType;
     stock: number;
     original_price: number;
+    cash_price: number;
 }
 
 declare interface IItemCnt extends IItem{
@@ -208,4 +209,19 @@ declare interface IEarningCalc extends IEarning{
 declare interface ResEarning {
     items: IEarningCalc[];
     cnt: number;
+}
+
+declare interface ReqTotalMember {
+    memberId: number;
+    date: string;
+}
+
+declare interface ReqTotalItem {
+    itemId: number;
+    date: string;
+}
+
+declare interface ITotal {
+    date: string;
+    price: number;
 }
