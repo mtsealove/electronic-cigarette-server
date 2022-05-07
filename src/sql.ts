@@ -424,8 +424,6 @@ const getTransactions = (ownerId: string, keyword: string, page: number, rows: n
                 }
             }
         }
-        console.log(query);
-
         connection.query(query, [ownerId], (e0: MysqlError | null, r0: ITransaction[]) => {
             if (e0) {
                 console.error(e0);
@@ -701,7 +699,6 @@ const getPresentAbleMembers = (memberId: string, query: string) => {
                                    on result.member_id = filtered.member_id
                      where result.name like '%${query}%'
                         or result.phone like '%${query}%'`;
-        console.log(sql);
         connection.query(sql, (err: MysqlError | null, results: IMember[]) => {
             if (err) {
                 console.error(err);
@@ -738,7 +735,7 @@ const getItemRank = (managerId: string, isMonth: boolean) => {
         connection.query(query, [format, format, managerId],
             (err: MysqlError | null, result: IItemCnt[]) => {
                 // console.log(result);
-                if (err) {
+                if (err) {``
                     console.error(err);
                     reject();
                 } else {
@@ -1000,7 +997,7 @@ const deleteItem = (itemId: number) => {
 
 // 사용자별 총액
 const getUserTotal = (memberId: number, date: string) =>{
-    return new Promise<ITotal[]>((resolve, reject) => {
+    return new Promise<number>((resolve, reject) => {
         let dateFormat = '%Y';
         switch (date) {
             case 'daily':
@@ -1014,24 +1011,24 @@ const getUserTotal = (memberId: number, date: string) =>{
                 break;
         }
 
-        const query = `select sum(price) price, date_format(transactionDate, '${dateFormat}') date
-                     from transactions
-                     where member_id = ?
-                     group by date
-                     order by date desc`;
-        connection.query(query, [memberId], (err: MysqlError|null, result: ITotal[])=>{
+        const query = `select sum(price) price
+                       from transactions
+                       where member_id=?
+                       and date_format(transactionDate, '${dateFormat}') = date_format(now(), '${dateFormat}')`;
+        connection.query(query, [memberId], (err: MysqlError|null, result: any[])=>{
             if(err) {
                 console.error(err);
                 reject();
             } else {
-                resolve(result);
+                console.log(result);
+                resolve(result[0].price||0);
             }
         })
     });
 }
 
 const getItemTotal = (itemId: number, date: string) =>{
-    return new Promise<ITotal[]>((resolve, reject) => {
+    return new Promise<number>((resolve, reject) => {
         let dateFormat = '%Y';
         switch (date) {
             case 'daily':
@@ -1044,17 +1041,16 @@ const getItemTotal = (itemId: number, date: string) =>{
                 dateFormat = '';
                 break;
         }
-        const query = `select sum(price) price, date_format(transactionDate, '${dateFormat}') date
-                     from transactions
-                     where item_id = ?
-                     group by date
-                     order by date desc`;
-        connection.query(query, [itemId], (err: MysqlError|null, result: ITotal[])=>{
+        const query = `select sum(price) price
+                       from transactions
+                       where item_id=?
+                         and date_format(transactionDate, '${dateFormat}') = date_format(now(), '${dateFormat}')`;
+        connection.query(query, [itemId], (err: MysqlError|null, result: any[])=>{
             if(err) {
                 console.error(err);
                 reject();
             } else {
-                resolve(result);
+                resolve(result[0].price||0);
             }
         })
     });

@@ -142,7 +142,6 @@ app.post('/verify', authJWT, (req: express.Request<IRequest>, res: express.Respo
     const {pin} = req.body;
     const {user_id} = req.params;
     if (user_id) {
-        console.log(pin);
         sql.verifyPin(user_id, pin)
             .then(() => {
                 res.status(200).json(true);
@@ -242,7 +241,6 @@ app.post('/members/delete', authJWT, (req: express.Request<IRequest>, res: expre
 app.post('/members/update', authJWT, (req: express.Request<IRequest>, res: express.Response) => {
     const {user_id} = req.params;
     const {memberId, name, phone, date} = req.body;
-    console.log(date);
     sql.updateMember(memberId, user_id!, name,phone, date)
         .then(() => {
             res.status(200).json(true);
@@ -430,7 +428,6 @@ app.get('/rank/items', authJWT, async (req: express.Request<IRequest, {}, {}, Re
 // @ts-ignore
 app.get('/items', authJWT, (req: express.Request<IRequest, {}, {}, ReqItems>, res: express.Response) => {
     const {page, rows, query, itemType, sort, sortType} = req.query;
-    console.log('query:', query);
     if (req.params.user_id) {
         sql.getItems(req.params.user_id, page, rows, sort, sortType, query, itemType).then((result) => {
             res.status(200).json(result);
@@ -476,7 +473,6 @@ app.get('/transactions', authJWT, (req: express.Request<IRequest, {}, {}, ReqTra
 
     if (user_id) {
         sql.getTransactions(user_id, query, page, rows, date, itemId, memberId).then((data) => {
-            console.log(data);
             res.status(200).json(data);
         }).catch(() => {
             res.status(400).json(false);
